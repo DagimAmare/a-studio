@@ -1,0 +1,44 @@
+# A Studio · astudio.hepius.co document root
+#
+# 1. HTTPS only.
+# 2. Real files and folders (app files, /media, /api, legal pages) are
+#    served as they are.
+# 3. /<handle> and /book/<handle> go through studio.php, which writes the
+#    artist's link preview, then serves the app.
+# 4. Every other path is a page inside the app (index.html).
+# 5. The app shell is never cached; fingerprinted assets are.
+
+Options -Indexes
+DirectoryIndex index.html
+AddType application/wasm .wasm
+AddType application/manifest+json .webmanifest
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  RewriteRule ^book/([A-Za-z0-9][A-Za-z0-9._-]{1,28}[A-Za-z0-9])/?$ studio.php?handle=$1&book=1 [L,QSA]
+  RewriteRule ^([A-Za-z0-9][A-Za-z0-9._-]{1,28}[A-Za-z0-9])/?$ studio.php?handle=$1 [L,QSA]
+
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+  <FilesMatch "\.(html|js|json|php|webmanifest)$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
+  <FilesMatch "\.(png|jpg|jpeg|gif|webp|svg|ico|ttf|otf|woff|woff2|wasm|frag)$">
+    Header set Cache-Control "public, max-age=604800"
+  </FilesMatch>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+</IfModule>

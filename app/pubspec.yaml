@@ -1,0 +1,70 @@
+name: a_studio
+description: "A Studio - book makeup, nails and hair artists in Addis Ababa."
+publish_to: 'none'
+version: 0.1.1+2
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter
+  # Same Firebase versions Alfam builds with on Flutter 3.35.7 / Dart 3.9.2.
+  # firebase_core_web must stay >= 3.12.0 on Dart 3.9 (3.11.0 does not compile).
+  firebase_core: ^4.14.0
+  firebase_auth: ^6.6.1
+  cloud_firestore: ^6.9.0
+  firebase_messaging: ^16.6.0
+  go_router: ^16.2.0
+  url_launcher: ^6.3.2
+  intl: ^0.20.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  fonts:
+    # Interface and body text.
+    - family: DMSans
+      fonts:
+        - asset: assets/fonts/DMSans-Regular.ttf
+        - asset: assets/fonts/DMSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/DMSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/DMSans-Bold.ttf
+          weight: 700
+    # Headlines, names and big numbers.
+    - family: Lora
+      fonts:
+        - asset: assets/fonts/Lora-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Lora-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Lora-SemiBoldItalic.ttf
+          weight: 600
+          style: italic
+    # Brand only: the A STUDIO wordmark and the "A." mark. The text-size cut
+    # (heavier hairlines) so the A keeps its crossbar at small sizes.
+    - family: Bodoni
+      fonts:
+        - asset: assets/fonts/BodoniModa-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/BodoniModa-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/BodoniModa-SemiBoldItalic.ttf
+          weight: 600
+          style: italic
+    # Amharic, used as the fallback for every family above.
+    - family: NotoSansEthiopic
+      fonts:
+        - asset: assets/fonts/NotoSansEthiopic-Regular.ttf
+        - asset: assets/fonts/NotoSansEthiopic-SemiBold.ttf
+          weight: 600

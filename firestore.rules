@@ -1,0 +1,437 @@
+rules_version = '2';
+
+// A Studio security rules.
+//
+// The web app writes most data directly, so these rules ARE the backend's
+// guard rails: every write the app makes is checked here for who may make
+// it and what it may contain. Cloud Functions use the Admin SDK and are
+// not bound by these rules.
+//
+// Collections: users (+push_tokens), admins, handles, studios (+private),
+// looks, bookings, busy, reviews, chats (+messages), notifications,
+// listings, activity, reports, templates. Anything not matched is denied.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ------------------------------------------------------------ helpers
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function me() {
+      return request.auth.uid;
+    }
+
+    function isAdmin() {
+      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function userData(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data;
+    }
+
+    // Paused accounts can still sign in and read, but not post.
+    function active() {
+      return signedIn()
+          && (!exists(/databases/$(database)/documents/users/$(request.auth.uid))
+              || userData(request.auth.uid).get('status', 'active') != 'suspended');
+    }
+
+    function isArtistUser() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && userData(request.auth.uid).get('role', 'client') == 'artist';
+    }
+
+    function changed() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    function str(v, max) {
+      return v is string && v.size() <= max;
+    }
+
+    function validHandle(h) {
+      return h is string && h.matches('^[a-z0-9][a-z0-9._-]{1,28}[a-z0-9]$')
+          && !(h in ['about', 'account', 'admin', 'api', 'app', 'artist', 'artists', 'backstage', 'blog',
+                     'book', 'booking', 'bookings', 'brush', 'cache', 'careers', 'chat', 'contact',
+                     'delete-account', 'desk', 'explore', 'faq', 'help', 'home', 'icons', 'inbox', 'legal',
+                     'login', 'logout', 'media', 'message', 'messages', 'notifications', 'privacy',
+                     'search', 'settings', 'shop', 'signin', 'signup', 'studio', 'studios', 'support',
+                     'terms', 'vanity', 'welcome', 'www', 'astudio', 'a-studio', 'hepius']);
+    }
+
+    // Media URLs must point at the uploader's own folder on our host.
+    function ownMedia(url) {
+      return url is string
+          && (url == '' || url.matches('^https://astudio[.]hepius[.]co/media/' + request.auth.uid + '/[A-Za-z0-9_.-]+$'));
+    }
+
+    // ------------------------------------------------------------ users
+
+    match /users/{uid} {
+      allow read: if signedIn() && (me() == uid || isAdmin());
+
+      allow create: if signedIn() && me() == uid
+          && request.resource.data.keys().hasOnly(['name', 'email', 'phone', 'photoUrl', 'role', 'lang',
+                 'birthday', 'prefs', 'status', 'consent', 'createdAt'])
+          && str(request.resource.data.name, 120)
+          && str(request.resource.data.email, 200)
+          && str(request.resource.data.phone, 30)
+          && request.resource.data.role in ['client', 'artist']
+          && request.resource.data.status == 'active'
+          && request.resource.data.consent.terms is string
+          && request.resource.data.consent.storageAbroad == true;
+
+      // The owner edits her own details. She may become an artist, never
+      // un-pause herself, and may only claim a verified email when her
+      // sign-in token says so. Phone verification is set by the server.
+      allow update: if signedIn() && me() == uid
+          && !changed().hasAny(['status', 'createdAt', 'consent'])
+          && (!('role' in changed()) || request.resource.data.role == 'artist')
+          && (!('emailVerified' in changed())
+              || (request.resource.data.emailVerified == true && request.auth.token.email_verified == true))
+          && (!('phoneVerified' in changed()) || request.resource.data.phoneVerified == false)
+          && (!('email' in changed()) || request.resource.data.email == request.auth.token.email)
+          && (!('name' in changed()) || str(request.resource.data.name, 120))
+          && (!('phone' in changed())
+              || (str(request.resource.data.phone, 30) && request.resource.data.get('phoneVerified', false) == false))
+          && (!('photoUrl' in changed()) || str(request.resource.data.photoUrl, 400))
+          && (!('lang' in changed()) || request.resource.data.lang in ['en', 'am'])
+          && (!('birthday' in changed())
+              || request.resource.data.birthday == ''
+              || request.resource.data.birthday.matches('^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'));
+
+      allow update: if isAdmin();
+      allow delete: if signedIn() && (me() == uid || isAdmin());
+
+      // One doc per browser or phone that turned on push. Owner only.
+      match /push_tokens/{tokenId} {
+        allow read, write: if signedIn() && me() == uid;
+      }
+    }
+
+    // Admin flags are created by hand in the console. Each admin can read
+    // only their own flag (that is how the app and media.php check it).
+    match /admins/{uid} {
+      allow read: if signedIn() && me() == uid;
+      allow write: if false;
+    }
+
+    // ------------------------------------------------------------ studios
+
+    match /handles/{handle} {
+      allow read: if true;
+      allow create: if active() && validHandle(handle)
+          && request.resource.data.uid == me()
+          && request.resource.data.keys().hasOnly(['uid', 'createdAt']);
+      allow update: if false;
+      allow delete: if signedIn() && (resource.data.uid == me() || isAdmin());
+    }
+
+    function studioFieldsOk(d) {
+      return str(d.name, 80) && str(d.get('tagline', ''), 120) && str(d.get('bio', ''), 1200)
+          && d.get('specialties', []) is list && d.get('specialties', []).size() <= 8
+          && d.get('subCities', []) is list && d.get('subCities', []).size() <= 11
+          && d.get('services', []) is list && d.get('services', []).size() <= 40
+          && d.get('blockedDates', []) is list && d.get('blockedDates', []).size() <= 400
+          && d.get('depositPercent', 0) is int && d.get('depositPercent', 0) >= 0 && d.get('depositPercent', 0) <= 50
+          && d.get('travelFee', 0) is int && d.get('travelFee', 0) >= 0
+          && d.get('cancellationPolicy', 'standard') in ['flexible', 'standard', 'bridal']
+          && str(d.get('whatsapp', ''), 30) && str(d.get('telegram', ''), 40);
+    }
+
+    function ownsHandleAfter(h) {
+      return getAfter(/databases/$(database)/documents/handles/$(h)).data.uid == request.auth.uid;
+    }
+
+    match /studios/{uid} {
+      allow read: if resource.data.status == 'live' || (signedIn() && (me() == uid || isAdmin()));
+
+      allow create: if active() && me() == uid
+          && ownsHandleAfter(request.resource.data.handle)
+          && request.resource.data.status == 'draft'
+          && request.resource.data.verification == 'none'
+          && !request.resource.data.keys().hasAny(['featured', 'badges', 'ratingAvg', 'ratingCount',
+                 'verifiedAt', 'verificationNote', 'phoneVerified', 'emailVerified', 'publishedAt'])
+          && studioFieldsOk(request.resource.data);
+
+      // The artist runs her own page, but badges, featuring, ratings and
+      // verification belong to A Studio. She may ask for verification by
+      // publishing, and may not lift a pause.
+      allow update: if active() && me() == uid
+          && !changed().hasAny(['featured', 'badges', 'ratingAvg', 'ratingCount', 'verifiedAt',
+                 'verificationNote', 'phoneVerified', 'createdAt'])
+          && resource.data.status != 'suspended'
+          && request.resource.data.status in ['draft', 'live']
+          && (!('verification' in changed())
+              || (request.resource.data.verification == 'pending'
+                  && resource.data.verification in ['none', 'rejected']))
+          && (!('emailVerified' in changed())
+              || (request.resource.data.emailVerified == true && request.auth.token.email_verified == true))
+          && (!('handle' in changed()) || ownsHandleAfter(request.resource.data.handle))
+          && (!('avatarUrl' in changed()) || ownMedia(request.resource.data.avatarUrl))
+          && (!('coverUrl' in changed()) || ownMedia(request.resource.data.coverUrl))
+          && studioFieldsOk(request.resource.data);
+
+      allow update: if isAdmin();
+      allow delete: if signedIn() && (me() == uid || isAdmin());
+
+      // payment: deposit details. verification: private file paths.
+      match /private/{doc} {
+        allow read, write: if signedIn() && (me() == uid || isAdmin());
+      }
+    }
+
+    match /looks/{lookId} {
+      allow read: if true;
+      allow create: if active()
+          && request.resource.data.studioUid == me()
+          && exists(/databases/$(database)/documents/studios/$(request.auth.uid))
+          && ownMedia(request.resource.data.url)
+          && ownMedia(request.resource.data.get('thumbUrl', ''))
+          && request.resource.data.type in ['image', 'video']
+          && str(request.resource.data.get('caption', ''), 300);
+      allow update: if signedIn() && resource.data.studioUid == me()
+          && changed().hasOnly(['caption', 'occasion'])
+          && str(request.resource.data.get('caption', ''), 300);
+      allow delete: if signedIn() && (resource.data.studioUid == me() || isAdmin());
+    }
+
+    // ------------------------------------------------------------ bookings
+
+    function artistMay(from, to) {
+      return from == to
+          || (from == 'requested' && to in ['accepted', 'confirmed', 'declined'])
+          || (from == 'accepted' && to in ['confirmed', 'cancelled_artist'])
+          || (from == 'deposit_submitted' && to in ['confirmed', 'accepted', 'cancelled_artist'])
+          || (from == 'confirmed' && to in ['completed', 'no_show', 'cancelled_artist']);
+    }
+
+    function clientMay(from, to) {
+      return from == to
+          || (from == 'accepted' && to in ['deposit_submitted', 'cancelled_client'])
+          || (from in ['requested', 'deposit_submitted', 'confirmed'] && to == 'cancelled_client');
+    }
+
+    match /bookings/{bookingId} {
+      allow read: if signedIn()
+          && (resource.data.clientUid == me() || resource.data.artistUid == me() || isAdmin());
+
+      allow create: if active()
+          && request.resource.data.clientUid == me()
+          && request.resource.data.artistUid != me()
+          && request.resource.data.status == 'requested'
+          && request.resource.data.reviewed == false
+          && get(/databases/$(database)/documents/studios/$(request.resource.data.artistUid)).data.status == 'live'
+          && request.resource.data.depositPercent ==
+             get(/databases/$(database)/documents/studios/$(request.resource.data.artistUid)).data.get('depositPercent', 30)
+          && request.resource.data.items is list
+          && request.resource.data.items.size() > 0 && request.resource.data.items.size() <= 12
+          && request.resource.data.people is int && request.resource.data.people >= 1 && request.resource.data.people <= 12
+          && request.resource.data.total is int && request.resource.data.total >= 0
+          && request.resource.data.depositAmount is int && request.resource.data.depositAmount >= 0
+          && request.resource.data.depositAmount <= request.resource.data.total
+          && request.resource.data.date is string && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+          && request.resource.data.startMin is int
+          && request.resource.data.place in ['studio', 'home', 'venue']
+          && str(request.resource.data.notes, 1000)
+          && str(request.resource.data.landmark, 300)
+          && !request.resource.data.keys().hasAny(['payment', 'paymentInstructions', 'declineReason', 'cancelReason']);
+
+      // The artist moves her bookings along the state machine.
+      allow update: if active() && resource.data.artistUid == me()
+          && changed().hasOnly(['status', 'paymentInstructions', 'declineReason', 'cancelReason', 'updatedAt'])
+          && artistMay(resource.data.status, request.resource.data.status)
+          && str(request.resource.data.get('declineReason', ''), 500)
+          && str(request.resource.data.get('cancelReason', ''), 500);
+
+      // The client pays, cancels, or (once completed) marks it reviewed.
+      allow update: if active() && resource.data.clientUid == me()
+          && changed().hasOnly(['status', 'payment', 'cancelReason', 'updatedAt'])
+          && clientMay(resource.data.status, request.resource.data.status)
+          && str(request.resource.data.get('cancelReason', ''), 500);
+      allow update: if active() && resource.data.clientUid == me()
+          && resource.data.status == 'completed'
+          && resource.data.reviewed == false
+          && changed().hasOnly(['reviewed', 'updatedAt'])
+          && request.resource.data.reviewed == true;
+
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // Busy intervals per artist per day, written by the server only. They
+    // carry no personal data, so anyone may read them to see free times.
+    match /busy/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // One review per completed booking; the review id is the booking id.
+    match /reviews/{bookingId} {
+      allow read: if true;
+      allow create: if active()
+          && get(/databases/$(database)/documents/bookings/$(bookingId)).data.clientUid == me()
+          && get(/databases/$(database)/documents/bookings/$(bookingId)).data.status == 'completed'
+          && get(/databases/$(database)/documents/bookings/$(bookingId)).data.reviewed == false
+          && getAfter(/databases/$(database)/documents/bookings/$(bookingId)).data.reviewed == true
+          && request.resource.data.studioUid ==
+             get(/databases/$(database)/documents/bookings/$(bookingId)).data.artistUid
+          && request.resource.data.clientUid == me()
+          && request.resource.data.rating is int && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
+          && request.resource.data.skill is int && request.resource.data.skill >= 1 && request.resource.data.skill <= 5
+          && request.resource.data.punctuality is int && request.resource.data.punctuality >= 1 && request.resource.data.punctuality <= 5
+          && request.resource.data.hygiene is int && request.resource.data.hygiene >= 1 && request.resource.data.hygiene <= 5
+          && request.resource.data.value is int && request.resource.data.value >= 1 && request.resource.data.value <= 5
+          && str(request.resource.data.text, 2000)
+          && request.resource.data.reply == '';
+      // The artist may reply once, publicly.
+      allow update: if active() && resource.data.studioUid == me()
+          && resource.data.reply == ''
+          && changed().hasOnly(['reply', 'replyAt'])
+          && str(request.resource.data.reply, 1000);
+      allow update, delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------ chat
+
+    // Chat ids are the two uids, sorted, joined by "_".
+    function inChatId(chatId) {
+      return signedIn() && request.auth.uid in chatId.split('_');
+    }
+
+    match /chats/{chatId} {
+      allow get: if inChatId(chatId);
+      allow list: if signedIn() && request.auth.uid in resource.data.participants;
+
+      allow create: if active() && inChatId(chatId)
+          && request.resource.data.participants.size() == 2
+          && request.resource.data.participants[0] < request.resource.data.participants[1]
+          && chatId == request.resource.data.participants[0] + '_' + request.resource.data.participants[1]
+          && request.resource.data.lastSenderUid == me();
+
+      allow update: if signedIn() && request.auth.uid in resource.data.participants
+          && request.resource.data.participants == resource.data.participants
+          && (changed().hasOnly(['unread'])
+              || (active() && request.resource.data.lastSenderUid == me()));
+
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        allow read: if inChatId(chatId);
+        allow create: if active() && inChatId(chatId)
+            && request.resource.data.senderUid == me()
+            && request.auth.uid in getAfter(/databases/$(database)/documents/chats/$(chatId)).data.participants
+            && request.resource.data.kind in ['text', 'image', 'booking', 'listing']
+            && str(request.resource.data.text, 4000)
+            && (!('imageUrl' in request.resource.data) || ownMedia(request.resource.data.imageUrl));
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+    }
+
+    // ------------------------------------------------------------ notifications
+
+    // A person may notify only the other person on a booking or chat they
+    // are part of, so nobody can push or email strangers. Admins may
+    // notify anyone (verification results, broadcasts).
+    function bookingPair(refId, toUid) {
+      let b = get(/databases/$(database)/documents/bookings/$(refId)).data;
+      return (b.clientUid == request.auth.uid && b.artistUid == toUid)
+          || (b.artistUid == request.auth.uid && b.clientUid == toUid);
+    }
+
+    function noteOk(notifId) {
+      let d = request.resource.data;
+      return d.fromUid == request.auth.uid
+          && d.toUid is string && d.toUid != request.auth.uid
+          && d.read == false
+          && str(d.title, 200) && str(d.body, 600) && str(d.get('link', ''), 300)
+          && (
+            (d.type == 'message'
+              && notifId == 'chat_' + d.refId + '_' + d.toUid
+              && request.auth.uid in d.refId.split('_')
+              && d.toUid in d.refId.split('_'))
+            || ((d.type.matches('^booking_[a-z_]+$') || d.type == 'review')
+              && d.refId is string && d.refId != ''
+              && bookingPair(d.refId, d.toUid))
+          );
+    }
+
+    match /notifications/{notifId} {
+      allow read: if signedIn() && resource.data.toUid == me();
+      allow create: if active() && (noteOk(notifId) || isAdmin());
+      // Chat notices are one doc per conversation, refreshed by the sender.
+      allow update: if active() && resource.data.fromUid != '' && noteOk(notifId) && request.resource.data.type == 'message';
+      // The recipient marks it read.
+      allow update: if signedIn() && resource.data.toUid == me()
+          && changed().hasOnly(['read']) && request.resource.data.read == true;
+      allow update: if isAdmin();
+      allow delete: if signedIn() && (resource.data.toUid == me() || isAdmin());
+    }
+
+    // ------------------------------------------------------------ shop
+
+    function listingOk(d) {
+      return str(d.title, 120) && d.title.size() >= 3
+          && d.price is int && d.price > 0 && d.price <= 100000000
+          && d.quantity is int && d.quantity >= 1 && d.quantity <= 999
+          && d.photos is list && d.photos.size() >= 1 && d.photos.size() <= 8
+          && d.condition in ['new_sealed', 'new_open', 'gently_used', 'used']
+          && str(d.get('description', ''), 1500)
+          && str(d.get('brand', ''), 80);
+    }
+
+    match /listings/{listingId} {
+      allow read: if resource.data.status != 'removed'
+          || (signedIn() && (resource.data.sellerUid == me() || isAdmin()));
+      allow create: if active() && (isArtistUser() || isAdmin())
+          && request.resource.data.sellerUid == me()
+          && request.resource.data.status == 'active'
+          && (request.resource.data.official == false || isAdmin())
+          && listingOk(request.resource.data);
+      allow update: if active() && resource.data.sellerUid == me()
+          && !changed().hasAny(['sellerUid', 'createdAt'])
+          && (!('official' in changed()) || isAdmin())
+          && request.resource.data.status in ['active', 'sold']
+          && resource.data.status != 'removed'
+          && listingOk(request.resource.data);
+      allow update: if isAdmin();
+      allow delete: if signedIn() && (resource.data.sellerUid == me() || isAdmin());
+    }
+
+    // ------------------------------------------------------------ admin
+
+    // Every meaningful action writes one line. Only admins read the log.
+    match /activity/{entryId} {
+      allow create: if signedIn()
+          && request.resource.data.actorUid == me()
+          && str(request.resource.data.type, 60)
+          && str(request.resource.data.summary, 300);
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /reports/{reportId} {
+      allow create: if signedIn()
+          && request.resource.data.reporterUid == me()
+          && request.resource.data.status == 'open'
+          && str(request.resource.data.reason, 1000);
+      allow read, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /templates/{templateId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Server-only collections: provider keys, one-time codes, mail and SMS
+    // queues. The functions reach them with the Admin SDK.
+    match /config/{id} { allow read, write: if false; }
+    match /otp/{id} { allow read, write: if false; }
+    match /mail_queue/{id} { allow read, write: if false; }
+    match /sms_queue/{id} { allow read, write: if false; }
+  }
+}

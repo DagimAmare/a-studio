@@ -1,0 +1,24 @@
+# Flutter / Dart
+app/.dart_tool/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/.packages
+app/build/
+app/.idea/
+*.iml
+
+# Functions
+functions/node_modules/
+functions/.env.local
+functions/.secret.local
+firebase-debug*.log
+ui-debug.log
+
+# Firebase CLI cache
+.firebase/
+
+# Local build output and runner
+astudio-web.zip
+.runner/
+.DS_Store
+Thumbs.db

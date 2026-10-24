@@ -1,0 +1,59 @@
+name: CI
+
+# Every push and pull request: analyze and test the app, build the web
+# bundle (downloadable as an artifact), and test the Cloud Functions.
+# Nothing is deployed from here.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.35.7
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-infos
+      - run: flutter test
+      - run: flutter build web --release --no-wasm-dry-run --pwa-strategy=none
+      - name: Kill-switch service worker
+        run: cp web/flutter_service_worker.js build/web/
+      - name: Pack astudio-web.zip
+        run: cd build/web && zip -qr ../../../astudio-web.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: astudio-web
+          path: astudio-web.zip
+          retention-days: 14
+
+  functions:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - name: Functions load
+        run: node -e "process.env.GCLOUD_PROJECT='astudio-207'; const f = require('./index.js'); console.log(Object.keys(f).join(', '))"

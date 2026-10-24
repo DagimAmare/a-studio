@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+
+  <title>A Studio · Book makeup, nails and hair artists in Addis Ababa</title>
+  <meta name="description" content="Find, book and pay independent makeup, nails and hair artists in Addis Ababa. Real portfolios, real reviews, Ethiopian dates and times.">
+  <link rel="canonical" href="https://astudio.hepius.co/">
+
+  <!-- Link previews (WhatsApp, Telegram, Facebook). studio.php rewrites these per artist. -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="A Studio">
+  <meta property="og:title" content="A Studio · Let's get you ready">
+  <meta property="og:description" content="Book Addis Ababa's best makeup, nails and hair artists.">
+  <meta property="og:image" content="https://astudio.hepius.co/og-default.jpg">
+  <meta property="og:url" content="https://astudio.hepius.co/">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <meta name="theme-color" content="#FAF6F1">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="A Studio">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="manifest" href="manifest.json">
+
+  <style>
+    html, body { margin: 0; height: 100%; background: #FAF6F1; }
+    #splash {
+      position: fixed; inset: 0; z-index: 9999;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: #FAF6F1; color: #1E1512;
+      font-family: "Didot", "Bodoni 72", "Bodoni MT", Georgia, serif;
+      transition: opacity .25s ease;
+    }
+    #splash .word { font-size: 30px; letter-spacing: .32em; padding-left: .32em; }
+    #splash .line { margin-top: 14px; font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-size: 13px; letter-spacing: .2em; text-transform: uppercase; color: #7A6A60; }
+    #splash .bar { margin-top: 26px; width: 120px; height: 2px; background: #EFE6DC; overflow: hidden; border-radius: 2px; }
+    #splash .bar::after { content: ""; display: block; width: 40%; height: 100%; background: #C8A97E;
+      animation: slide 1.1s ease-in-out infinite; }
+    @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
+    @media (prefers-reduced-motion: reduce) { #splash .bar::after { animation: none; width: 100%; } }
+  </style>
+</head>
+<body>
+  <div id="splash" aria-hidden="true">
+    <div class="word">A STUDIO</div>
+    <div class="line">Let's get you ready</div>
+    <div class="bar"></div>
+  </div>
+  <noscript>A Studio needs JavaScript to run. Please turn it on and reload.</noscript>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

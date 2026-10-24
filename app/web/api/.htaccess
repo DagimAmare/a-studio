@@ -1,0 +1,10 @@
+# A Studio API folder.
+Options -Indexes
+# config.php only holds settings; never serve it directly.
+<Files "config.php">
+  Require all denied
+</Files>
+<IfModule mod_headers.c>
+  Header set Cache-Control "no-store"
+  Header set X-Content-Type-Options "nosniff"
+</IfModule>
