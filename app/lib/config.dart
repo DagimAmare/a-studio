@@ -9,7 +9,7 @@ class AppConfig {
   static const String supportEmail = 'brush@astudio.hepius.co';
 
   /// Shown at the bottom of Account so testers can confirm which build is live.
-  static const String buildLabel = 'v0.1.2 (build 3) · 25 Oct 2026';
+  static const String buildLabel = 'v0.1.3 (build 4) · 25 Oct 2026';
 
   /// Bump when the Terms or Privacy Policy change in a way users must accept.
   static const String termsVersion = '2026-10-24';

@@ -54,6 +54,11 @@ function require_same_origin() {
     }
 }
 
+/**
+ * Calls a Google API. The browser API key is limited to the site's own
+ * address (Google Cloud > Credentials), so every call sends the site as
+ * its Referer; without it Google refuses the key.
+ */
 function http_json($method, $url, $body = null, $headers = []) {
     if (!function_exists('curl_init')) {
         return [0, null];
@@ -65,6 +70,7 @@ function http_json($method, $url, $body = null, $headers = []) {
         CURLOPT_CONNECTTIMEOUT => 5,
         CURLOPT_TIMEOUT        => 10,
         CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_REFERER        => SITE_ORIGIN . '/',
         CURLOPT_HTTPHEADER     => array_merge(['Accept: application/json'], $headers),
     ];
     if ($body !== null) {

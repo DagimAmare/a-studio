@@ -23,6 +23,7 @@ Open https://console.firebase.google.com/project/astudio-207
 3. **Email Accounts > Create**: `brush@astudio.hepius.co` with a strong password. Keep the password to yourself; you will type it once into the Firebase command in step 4.
 4. Open that account's **Connect Devices** page and note the **Outgoing Server** name (for example `mail.hepius.co`) and the SMTP port (usually 465). Tell Claude the server name; never the password.
 5. **Email Deliverability**: fix anything it flags for `astudio.hepius.co` (SPF and DKIM), so A Studio emails land in inboxes, not spam.
+   - The host sends mail out through its own gateways, so the SPF record for `astudio.hepius.co` must include them: `v=spf1 +mx +a +ip4:91.204.209.19 include:spf.hostns.io ~all` (**Zone Editor** > `hepius.co` > **Manage** > the TXT record for `astudio.hepius.co`). Without the include, Gmail reports SPF: SOFTFAIL.
 
 ## 3. Upload the website (you, after every new build)
 
@@ -77,3 +78,17 @@ Phone sign-in codes, "Phone verified" badges and SMS broadcasts are built and sw
 ## 7. After each release (Claude)
 
 `flutter analyze` > `flutter test` > `flutter build web --release --no-wasm-dry-run --pwa-strategy=none` > copy the kill-switch service worker > zip with `tar` (never Compress-Archive) > you upload (step 3).
+
+## 8. Lock the browser API key to the site (you, once, after v0.1.3 is live)
+
+The Firebase web API key ships inside the app, so anyone can copy it. Limiting it to A Studio's addresses stops other websites from using it. From v0.1.3 the server's own calls (uploads, link previews, the Backstage file check) send the site's address, so they keep working.
+
+1. Open https://console.cloud.google.com/apis/credentials?project=astudio-207
+2. Under **API Keys**, open **Browser key (auto created by Firebase)**. Its key starts with `AIzaSyD19Qk`. Leave any other key alone.
+3. **Application restrictions**: choose **Websites**, then add these two:
+   - `https://astudio.hepius.co/*`
+   - `https://astudio-207.firebaseapp.com/*` (Google sign-in and the links in verification and password reset emails open there)
+4. Leave **API restrictions** as they are and press **Save**. It takes up to 5 minutes to apply.
+5. Tell Claude, who checks link previews and that the key now refuses other sites. Then test on https://astudio.hepius.co: sign in with Google, upload a photo, open a verification file in Backstage, and open the link in a password reset email.
+
+To undo it, set **Application restrictions** back to **None** and save.
