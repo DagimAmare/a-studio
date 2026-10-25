@@ -52,6 +52,7 @@ firebase deploy --only firestore,functions
 - It asks how many days to keep container images: press Enter (1 day).
 - The very first 2nd-gen deploy often fails once on "Eventarc Service Agent" permissions. Wait two minutes and run the deploy again (same as Alfam).
 - Scheduled jobs (hourly, daily, mail queue) create Cloud Scheduler jobs. Three are free per billing account.
+- Emails not arriving and the functions log says `535 Incorrect authentication data`: the saved mail password is wrong. Set a new password for brush@astudio.hepius.co in cPanel, check it by signing in to webmail, run `firebase functions:secrets:set SMTP_PASS` again, then `firebase deploy --only functions` (functions only pick up a new secret on deploy).
 
 Set a budget alert while you are there: Google Cloud console > Billing > Budgets & alerts > a small amount, alerts at 50%, 90% and 100%.
 

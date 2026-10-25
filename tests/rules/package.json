@@ -1,0 +1,13 @@
+{
+  "name": "astudio-rules-tests",
+  "private": true,
+  "description": "Checks firestore.rules against the writes the app makes. See flows.mjs.",
+  "type": "module",
+  "scripts": {
+    "test": "cd ../.. && npx --yes firebase-tools@15.34.1 emulators:exec --only firestore --project demo-astudio \"node tests/rules/flows.mjs firestore.rules\""
+  },
+  "dependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "firebase": "^11.10.0"
+  }
+}

@@ -1,7 +1,7 @@
 name: a_studio
 description: "A Studio - book makeup, nails and hair artists in Addis Ababa."
 publish_to: 'none'
-version: 0.1.1+2
+version: 0.1.2+3
 
 environment:
   sdk: ^3.9.2

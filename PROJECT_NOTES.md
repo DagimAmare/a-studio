@@ -34,6 +34,7 @@ tar -a -cf ..\astudio-web.zip -C build\web .
 - `app/web/` ships PHP and `.htaccess` files inside the build, so one zip deploys everything.
 - Bump `AppConfig.buildLabel` (`app/lib/config.dart`) and `version` in `pubspec.yaml` for every build that goes live.
 - GitHub: https://github.com/DagimAmare/a-studio. CI (`.github/workflows/ci.yml`) analyzes, tests and builds on every push and keeps the zip as an artifact; it deploys nothing.
+- `tests/rules/flows.mjs` replays the app's writes (sign-up, studio setup, publish, verification, every booking path, reviews, chat, notifications, The Vanity, Backstage, deletion) against `firestore.rules` on the emulator, plus the denials. CI runs it; any change to the rules or to a write in `app/lib/services` should keep it green (update the test when a write changes).
 
 ## Architecture
 

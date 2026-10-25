@@ -266,7 +266,7 @@ class AdminService {
     final s = Session.instance;
     await Db.notifications.add({
       'toUid': s.uid,
-      'fromUid': s.uid,
+      'fromUid': 'backstage',
       'fromName': 'A Studio',
       'type': 'announcement',
       'title': '[Test] ${fill(title, s.displayName)}',
@@ -279,10 +279,9 @@ class AdminService {
   }
 
   static void _notify(String toUid, String title, String body, String link) {
-    final s = Session.instance;
     Db.notifications.add({
       'toUid': toUid,
-      'fromUid': s.uid,
+      'fromUid': 'backstage',
       'fromName': 'A Studio',
       'type': 'admin',
       'title': title,
@@ -311,7 +310,6 @@ class AdminService {
     if (audience == 'clients') q = q.where('role', isEqualTo: 'client');
     if (audience == 'artists') q = q.where('role', isEqualTo: 'artist');
     final users = await q.limit(5000).get().timeout(const Duration(seconds: 60));
-    final s = Session.instance;
     var batch = Db.fs.batch();
     var inBatch = 0;
     var total = 0;
@@ -324,7 +322,7 @@ class AdminService {
       final am = data['lang'] == 'am' && titleAm.trim().isNotEmpty;
       batch.set(Db.notifications.doc(), {
         'toUid': u.id,
-        'fromUid': s.uid,
+        'fromUid': 'backstage',
         'fromName': 'A Studio',
         'type': marketingOnly ? 'campaign' : 'announcement',
         'title': fill(am ? titleAm : title, name),

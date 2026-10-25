@@ -9,6 +9,7 @@ app/.idea/
 
 # Functions
 functions/node_modules/
+tests/rules/node_modules/
 functions/.env.local
 functions/.secret.local
 firebase-debug*.log
