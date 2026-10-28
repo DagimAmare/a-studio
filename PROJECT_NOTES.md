@@ -15,6 +15,7 @@ For whoever works on A Studio next (including future Claude sessions). Read this
 - Flutter on the PC: `C:\Flutter\flutter`, Flutter 3.35.7, Dart 3.9.2. The cloud sandbox cannot run Flutter (its downloads are blocked), so every Flutter command runs on the PC.
 - Running commands on the PC: Windows-MCP when it works; otherwise `tools\start-runner.cmd` (double-click it on the PC). It runs `.runner\job.ps1` from the project root and writes `.runner\out.txt` and `.runner\status.txt` (`running <id>` / `done <id> <exit>`). Put `# job: <id>` on the first line of each job.
 - Firebase project `astudio-207` (Blaze). Firestore multi-region `eur3`; functions in `europe-west1` (a Firestore trigger must sit in the same continent).
+- Firestore protection (since 26 Oct 2026): point-in-time recovery (7 days), delete protection, and a weekly backup every Sunday kept 14 weeks. A database allows one weekly schedule.
 - cPanel hosts the website (document root folder `astudio.hepius.co`), all public media (`/media/<uid>/`), the upload API (`/api/`) and private verification files (`~/astudio_private/<uid>/`, outside the website).
 
 ## Build and release
@@ -50,14 +51,16 @@ tar -a -cf ..\astudio-web.zip -C build\web .
 - Payments v1: the client pays the deposit straight to the artist (details shown after she accepts) and enters the reference; the artist confirms. A Studio never holds money. Chapa comes later.
 - Chat: one conversation per pair, id = the two uids sorted and joined by `_`. One notification doc per conversation per receiver (`chat_<chatId>_<toUid>`), overwritten per message; email only for the first unread message of a streak.
 - Push: tokens at `users/<uid>/push_tokens/<token>`; permission only from a button; token removed before sign-out (Alfam lesson). `firebase-messaging-sw.js` handles background pushes.
+- Getting-started emails (`functions/lib/onboarding.js`): `userCreated` sends the welcome and creates `drip/<uid>`; `hourly` sends the rest from `mail_queue`: your studio (day 1), The Vanity (day 2), how bookings work (day 4), tips (day 7). Each email fits the person (artist or client, English or Amharic, studio none, draft, live). Between 9 AM and 8 PM Addis, at least 20 hours apart. Accounts that existed before the series got it once from the studio email on (`config/onboarding.backfilledAt`). People stop them with the email's link (the `emails` function: GET asks, POST stops, also the mail app's one-click unsubscribe) or in Account (`prefs.tips`). Backstage > Broadcast emails an admin every version.
+- Guidance into a studio: sign-up asks artist or client with two big choices; a draft studio's Desk Overview leads with the four steps to go live (`desk_launch.dart`, the same steps as the emails), every other Desk tab shows a next-step bar until she is live, and Home shows a studio card to signed-in people (clients can hide it).
 
 ## Firestore collections
 
-`users` (+`push_tokens`), `admins`, `handles` (handle -> uid), `studios` (+`private/payment`, `private/verification`), `looks`, `bookings`, `busy` (server), `reviews` (id = booking id), `chats` (+`messages`), `notifications`, `listings`, `activity`, `reports`, `templates`, server-only `config`, `otp`, `mail_queue`, `sms_queue`.
+`users` (+`push_tokens`), `admins`, `handles` (handle -> uid), `studios` (+`private/payment`, `private/verification`), `looks`, `bookings`, `busy` (server), `reviews` (id = booking id), `chats` (+`messages`), `notifications`, `listings`, `activity`, `reports`, `templates`, server-only `config`, `otp`, `mail_queue`, `sms_queue`, `drip` (getting-started emails, one doc per person).
 
 ## Functions
 
-`notificationChanged`, `drainQueues` (every 10 min), `bookingChanged`, `reviewChanged`, `studioChanged`, `hourly`, `daily` (8 AM Addis), `phoneCode` (HTTP), `accountDeleted` (1st gen auth trigger). Secret: `SMTP_PASS`. Settings: `functions/.env` (+ `SMTP_HOST` prompted on first deploy). Recursion rule: a function never writes the collection that triggers it, except fields its own guard ignores.
+`notificationChanged`, `drainQueues` (every 10 min), `bookingChanged`, `reviewChanged`, `studioChanged`, `hourly`, `daily` (8 AM Addis), `phoneCode` (HTTP), `userCreated` (welcome email), `emails` (HTTP: stop-tips link and the Backstage preview), `accountDeleted` (1st gen auth trigger). Secret: `SMTP_PASS`. Settings: `functions/.env` (+ `SMTP_HOST` prompted on first deploy). Recursion rule: a function never writes the collection that triggers it, except fields its own guard ignores.
 
 ## Deviations from the plan (v1)
 

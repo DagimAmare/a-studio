@@ -9,7 +9,8 @@ rules_version = '2';
 //
 // Collections: users (+push_tokens), admins, handles, studios (+private),
 // looks, bookings, busy, reviews, chats (+messages), notifications,
-// listings, activity, reports, templates. Anything not matched is denied.
+// listings, activity, reports, templates, and the server-only config, otp,
+// mail_queue, sms_queue and drip. Anything not matched is denied.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -428,10 +429,12 @@ service cloud.firestore {
     }
 
     // Server-only collections: provider keys, one-time codes, mail and SMS
-    // queues. The functions reach them with the Admin SDK.
+    // queues, and where each person is in the getting-started emails. The
+    // functions reach them with the Admin SDK.
     match /config/{id} { allow read, write: if false; }
     match /otp/{id} { allow read, write: if false; }
     match /mail_queue/{id} { allow read, write: if false; }
     match /sms_queue/{id} { allow read, write: if false; }
+    match /drip/{id} { allow read, write: if false; }
   }
 }

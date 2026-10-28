@@ -5,6 +5,7 @@ import '../../l10n/tr.dart';
 import '../../models/models.dart';
 import '../../services/booking_service.dart';
 import '../../services/session.dart';
+import '../../services/studio_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/colors.dart';
 import '../../widgets/common.dart';
@@ -13,6 +14,7 @@ import '../../widgets/shell.dart';
 import 'desk_bookings.dart';
 import 'desk_decor.dart';
 import 'desk_hours.dart';
+import 'desk_launch.dart';
 import 'desk_overview.dart';
 import 'desk_payments.dart';
 import 'desk_portfolio.dart';
@@ -80,6 +82,7 @@ class _Desk extends StatefulWidget {
 class _DeskState extends State<_Desk> {
   late int _index = _indexOf(widget.initialTab);
   late final Stream<List<Booking>> _bookings = BookingService.asArtist();
+  late final Stream<List<Look>> _looks = StudioService.looksFor(widget.studio.uid);
 
   static int _indexOf(String id) {
     final i = kDeskTabs.indexWhere((t) => t.id == id);
@@ -131,10 +134,26 @@ class _DeskState extends State<_Desk> {
         final pending = bookings
             .where((b) => b.status == BookingStatus.requested || b.status == BookingStatus.depositSubmitted)
             .length;
-        final body = KeyedSubtree(
-          key: ValueKey(kDeskTabs[_index].id),
-          child: _body(widget.studio, bookings),
-        );
+        final tabId = kDeskTabs[_index].id;
+        final s = widget.studio;
+        final Widget body = Column(children: [
+          // Until she is live, every tab says where she is in the four steps.
+          if (!s.isLive && s.status != 'suspended' && tabId != 'overview')
+            StreamBuilder<List<Look>>(
+              stream: _looks,
+              builder: (context, looksSnap) => LaunchBar(
+                steps: launchSteps(s, looksSnap.data?.length ?? 0),
+                currentTab: tabId,
+                onOpen: _open,
+              ),
+            ),
+          Expanded(
+            child: KeyedSubtree(
+              key: ValueKey(tabId),
+              child: _body(s, bookings),
+            ),
+          ),
+        ]);
         if (wide) {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,

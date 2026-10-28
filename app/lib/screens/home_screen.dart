@@ -17,6 +17,7 @@ import '../widgets/cards.dart';
 import '../widgets/common.dart';
 import '../widgets/media_viewer.dart';
 import '../widgets/shell.dart';
+import 'desk/desk_launch.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -140,6 +141,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  const _YourStudioCard(),
                   const _GlamBanner(),
                   // ------------------------------------------------ artists
                   SectionHeader(
@@ -387,6 +389,135 @@ class _ArtistCta extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// For signed-in people: a way into opening a studio, or back to finishing
+/// one. Clients can hide it; artists see it until their studio is live.
+class _YourStudioCard extends StatefulWidget {
+  const _YourStudioCard();
+  @override
+  State<_YourStudioCard> createState() => _YourStudioCardState();
+}
+
+class _YourStudioCardState extends State<_YourStudioCard> {
+  static const _hideKey = 'astudio.hideStudioCard';
+  bool _hidden = bridge.readLocal(_hideKey) == '1';
+  String _looksFor = '';
+  Stream<List<Look>>? _looks;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: Session.instance,
+      builder: (context, _) {
+        final s = Session.instance;
+        if (!s.signedIn || s.profile == null || !s.studioLoaded) return const SizedBox.shrink();
+        final studio = s.studio;
+        if (studio == null) {
+          final artist = s.isArtist;
+          if (!artist && _hidden) return const SizedBox.shrink();
+          return _frame(
+            context,
+            kicker: artist ? context.tr('YOUR STUDIO', 'ስቱዲዮዎ') : context.tr('FOR ARTISTS', 'ለባለሙያዎች'),
+            title: artist
+                ? context.tr('Your studio is waiting', 'ስቱዲዮዎ እየጠበቀዎት ነው')
+                : context.tr('Do you do makeup, nails or hair?', 'ሜካፕ፣ ጥፍር ወይም ፀጉር ይሠራሉ?'),
+            body: artist
+                ? context.tr('Open it in about 10 minutes: your page, your link and your bookings. You can finish the details later.',
+                    'በ10 ደቂቃ ያህል ይክፈቱት፡ የራስዎ ገጽ፣ ሊንክ እና ቀጠሮዎች። ዝርዝሩን በኋላ መጨረስ ይችላሉ።')
+                : context.tr('Open your own studio for free: your page and link, bookings with deposits, and reviews.',
+                    'የራስዎን ስቱዲዮ በነጻ ይክፈቱ፡ የራስዎ ገጽ እና ሊንክ፣ ቅድመ ክፍያ ያላቸው ቀጠሮዎች እና ግምገማዎች።'),
+            action: artist ? context.tr('Set up my studio', 'ስቱዲዮዬን አዘጋጅ') : context.tr('Open my studio', 'ስቱዲዮዬን አዘጋጅ'),
+            onAction: () => context.go('/desk/setup'),
+            onClose: artist
+                ? null
+                : () {
+                    bridge.writeLocal(_hideKey, '1');
+                    setState(() => _hidden = true);
+                  },
+          );
+        }
+        if (studio.isLive || studio.status == 'suspended') return const SizedBox.shrink();
+        if (_looksFor != studio.uid) {
+          _looksFor = studio.uid;
+          _looks = StudioService.looksFor(studio.uid);
+        }
+        return StreamBuilder<List<Look>>(
+          stream: _looks,
+          builder: (context, snap) {
+            final steps = launchSteps(studio, snap.data?.length ?? 0);
+            final next = nextLaunchStep(steps);
+            final done = steps.where((x) => x.done).length;
+            return _frame(
+              context,
+              kicker: context.tr('ALMOST THERE', 'ሊጨርሱ ነው'),
+              title: next == null
+                  ? context.tr('Your studio is ready to publish', 'ስቱዲዮዎ ለመከፈት ዝግጁ ነው')
+                  : context.tr('Finish your studio', 'ስቱዲዮዎን ይጨርሱ'),
+              body: next == null
+                  ? context.tr('Publish it, and clients can find and book you.', 'ይክፈቱት፤ ደንበኞች ያገኙዎታል፣ ቀጠሮም ይይዛሉ።')
+                  : context.tr('$done of ${steps.length} steps done. Next: ${next.title(context)}. Clients can book you once you publish.',
+                      'ከ${steps.length} እርምጃዎች $done ተጠናቀዋል። ቀጣዩ፡ ${next.title(context)}። ከከፈቱ በኋላ ደንበኞች ይይዙዎታል።'),
+              progress: done / steps.length,
+              action: next == null ? context.tr('Publish my studio', 'ስቱዲዮዬን ክፈት') : context.tr('Continue', 'ቀጥል'),
+              onAction: () => context.go('/desk'),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _frame(
+    BuildContext context, {
+    required String kicker,
+    required String title,
+    required String body,
+    required String action,
+    required VoidCallback onAction,
+    double? progress,
+    VoidCallback? onClose,
+  }) {
+    final t = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.only(top: 24),
+      padding: const EdgeInsets.fromLTRB(22, 20, 12, 22),
+      decoration: BoxDecoration(color: AppColors.petal, borderRadius: BorderRadius.circular(24)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(child: Text(kicker, style: labelCaps(color: AppColors.cocoa))),
+          if (onClose != null)
+            IconButton(
+              tooltip: context.tr('Hide', 'ደብቅ'),
+              onPressed: onClose,
+              icon: const Icon(Icons.close, size: 20, color: AppColors.cocoa),
+            ),
+        ]),
+        Padding(
+          padding: const EdgeInsets.only(right: 10),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const SizedBox(height: 4),
+            Text(title, style: displayStyle(26, color: AppColors.espresso)),
+            const SizedBox(height: 8),
+            Text(body, style: t.textTheme.bodyLarge?.copyWith(color: AppColors.cocoa)),
+            if (progress != null) ...[
+              const SizedBox(height: 14),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(99),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 6,
+                  backgroundColor: AppColors.milk,
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            FilledButton(onPressed: onAction, child: Text(action)),
+          ]),
+        ),
+      ]),
     );
   }
 }

@@ -316,8 +316,41 @@ class _BroadcastTabState extends State<BroadcastTab> {
             ),
           ),
         ),
+        const SizedBox(height: 28),
+        Text('GETTING-STARTED EMAILS', style: labelCaps()),
+        const SizedBox(height: 8),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              const Text(
+                  'Every new account gets a welcome email, then four more in its first week: opening a studio (day 1), '
+                  'The Vanity (day 2), how bookings work (day 4) and tips (day 7). Each one fits the person: artist or '
+                  'client, English or Amharic, and where her studio stands. They go out between 9 AM and 8 PM Addis, '
+                  'at most one a day, and anyone can stop them from the email or in Account.'),
+              const SizedBox(height: 14),
+              Wrap(spacing: 10, runSpacing: 10, children: [
+                OutlinedButton.icon(
+                  onPressed: () => _previewSeries('en'),
+                  icon: const Icon(Icons.mail_outline),
+                  label: const Text('Email me every version (English)'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => _previewSeries('am'),
+                  icon: const Icon(Icons.mail_outline),
+                  label: const Text('Email me every version (አማርኛ)'),
+                ),
+              ]),
+            ]),
+          ),
+        ),
       ],
     );
+  }
+
+  Future<void> _previewSeries(String lang) async {
+    final sent = await Busy.run(context, () => AdminService.previewOnboarding(lang: lang));
+    if (sent != null && mounted) toast(context, 'Sent $sent emails to you. They arrive in a minute or two.');
   }
 }
 

@@ -15,6 +15,7 @@ import '../../theme/colors.dart';
 import '../../widgets/cards.dart';
 import '../../widgets/common.dart';
 import '../../widgets/phone_verify.dart';
+import 'desk_launch.dart';
 import 'desk_screen.dart';
 
 class OverviewTab extends StatefulWidget {
@@ -136,7 +137,8 @@ class _OverviewTabState extends State<OverviewTab> {
                 ),
             ]),
           ),
-        DeskCard(
+        if (s.isLive || todays.isNotEmpty)
+          DeskCard(
           title: context.tr('Today', 'ዛሬ'),
           children: [
             if (todays.isEmpty)
@@ -149,7 +151,7 @@ class _OverviewTabState extends State<OverviewTab> {
                 ),
           ],
         ),
-        _LinkCard(studio: s),
+        if (s.isLive) _LinkCard(studio: s),
         StreamBuilder<List<Look>>(
           stream: _looks,
           builder: (context, looksSnap) => FutureBuilder<PaymentDetails>(
@@ -165,6 +167,7 @@ class _OverviewTabState extends State<OverviewTab> {
             ),
           ),
         ),
+        if (!s.isLive) _LinkCard(studio: s),
         StreamBuilder<Map<String, dynamic>>(
           stream: _verification,
           builder: (context, snap) => _VerificationCard(
@@ -279,6 +282,20 @@ class _LinkCard extends StatelessWidget {
               'በኢንስታግራም፣ ቲክቶክ እና ቴሌግራም መግለጫዎ ላይ ያስቀምጡት። በሱ የሚመጣ እያንዳንዱ ቀጠሮ እዚህ ይደርሳል።'),
           style: Theme.of(context).textTheme.bodySmall,
         ),
+        if (!studio.isLive) ...[
+          const SizedBox(height: 10),
+          Row(children: [
+            const Icon(Icons.info_outline, size: 18, color: AppColors.honey),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                context.tr('Your link starts working when you publish your studio.',
+                    'ሊንክዎ የሚሠራው ስቱዲዮዎን ከከፈቱ በኋላ ነው።'),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.cocoa),
+              ),
+            ),
+          ]),
+        ],
         const SizedBox(height: 14),
         Wrap(spacing: 10, runSpacing: 10, children: [
           FilledButton.icon(
@@ -334,53 +351,77 @@ class _Checklist extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = studio;
-    final items = <_Item>[
-      _Item(s.avatarUrl.isNotEmpty, true, context.tr('Profile photo', 'የመገለጫ ፎቶ'),
-          context.tr('A clear photo of you', 'የእርስዎ ግልጽ ፎቶ'), 'profile'),
-      _Item(s.activeServices.isNotEmpty, true, context.tr('At least one service', 'ቢያንስ አንድ አገልግሎት'),
-          context.tr('With a price, a "from" price, or price on request', 'ከዋጋ ጋር ወይም ዋጋ በጥያቄ'), 'services'),
-      _Item(looks > 0, true, context.tr('Portfolio', 'የሥራ ናሙናዎች'),
-          looks >= 6
-              ? context.tr('$looks looks', '$looks ሥራዎች')
-              : context.tr('Add at least 6 photos or videos ($looks so far)', 'ቢያንስ 6 ፎቶ ወይም ቪዲዮ ያክሉ (እስካሁን $looks)'),
-          'portfolio'),
-      _Item(s.hours.isNotEmpty, true, context.tr('Working hours', 'የሥራ ሰዓት'),
-          context.tr('When clients can book you', 'ደንበኞች መቼ ሊይዙዎት እንደሚችሉ'), 'hours'),
-      _Item(s.coverUrl.isNotEmpty, false, context.tr('Cover photo or reel', 'የሽፋን ፎቶ ወይም ቪዲዮ'),
+    final t = Theme.of(context);
+    final steps = launchSteps(s, looks);
+    final next = nextLaunchStep(steps);
+    final done = steps.where((x) => x.done).length;
+    final ready = next == null;
+    final optional = <_Item>[
+      _Item(s.coverUrl.isNotEmpty, context.tr('Cover photo or reel', 'የሽፋን ፎቶ ወይም ቪዲዮ'),
           context.tr('The big image at the top of your page', 'በገጽዎ አናት ላይ ያለው ትልቅ ምስል'), 'profile'),
-      _Item(s.whatsapp.isNotEmpty || s.telegram.isNotEmpty, false, context.tr('WhatsApp or Telegram', 'ዋትስአፕ ወይም ቴሌግራም'),
+      _Item(s.whatsapp.isNotEmpty || s.telegram.isNotEmpty, context.tr('WhatsApp or Telegram', 'ዋትስአፕ ወይም ቴሌግራም'),
           context.tr('So clients can reach you quickly', 'ደንበኞች በፍጥነት እንዲያገኙዎት'), 'profile'),
       if (s.depositPercent > 0)
-        _Item(hasPayment, false, context.tr('Deposit payment details', 'የቅድመ ክፍያ መረጃ'),
+        _Item(hasPayment, context.tr('Deposit payment details', 'የቅድመ ክፍያ መረጃ'),
             context.tr('Your Telebirr or CBE account for deposits', 'ለቅድመ ክፍያ የቴሌብር ወይም የንግድ ባንክ ሂሳብዎ'), 'payments'),
-      _Item(emailVerified, false, context.tr('Email confirmed', 'ኢሜይል ተረጋግጧል'),
+      _Item(emailVerified, context.tr('Email confirmed', 'ኢሜይል ተረጋግጧል'),
           context.tr('Open the link we emailed you', 'የላክንልዎትን ሊንክ ይክፈቱ'), ''),
     ];
-    final ready = items.where((i) => i.required).every((i) => i.done);
-    final done = items.where((i) => i.done).length;
-    return DeskCard(
-      title: s.isLive ? context.tr('Your page is live', 'ገጽዎ ክፍት ነው') : context.tr('Get ready to go live', 'ለመክፈት ይዘጋጁ'),
-      trailing: Text('$done / ${items.length}', style: labelCaps()),
+
+    final shine = DeskCard(
+      title: context.tr('Make it shine', 'ያሳምሩት'),
+      trailing: Text('${optional.where((i) => i.done).length} / ${optional.length}', style: labelCaps()),
       children: [
-        for (final i in items)
+        Text(context.tr('Optional, and they help clients choose you.', 'አማራጭ ናቸው፤ ደንበኞች እርስዎን እንዲመርጡ ይረዳሉ።'),
+            style: t.textTheme.bodySmall),
+        const SizedBox(height: 4),
+        for (final i in optional)
           ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: Icon(
-              i.done ? Icons.check_circle : Icons.radio_button_unchecked,
-              color: i.done ? AppColors.sage : (i.required ? AppColors.rouge : AppColors.taupe),
-            ),
-            title: Text(i.required ? '${i.title} *' : i.title),
+            leading: Icon(i.done ? Icons.check_circle : Icons.radio_button_unchecked,
+                color: i.done ? AppColors.sage : AppColors.taupe),
+            title: Text(i.title),
             subtitle: Text(i.subtitle),
             trailing: i.tab.isEmpty ? null : const Icon(Icons.chevron_right),
             onTap: i.tab.isEmpty ? null : () => onOpen(i.tab),
           ),
-        const SizedBox(height: 10),
-        if (s.isLive)
-          Wrap(spacing: 10, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
-            Pill(context.tr('Live', 'ክፍት'), icon: Icons.circle, background: AppColors.sage, foreground: AppColors.milk),
-            TextButton(onPressed: onUnpublish, child: Text(context.tr('Take my page offline', 'ገጼን ዝጋ'))),
-          ])
-        else ...[
+      ],
+    );
+
+    if (s.isLive) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        DeskCard(
+          title: context.tr('Your page is live', 'ገጽዎ ክፍት ነው'),
+          children: [
+            Wrap(spacing: 10, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
+              Pill(context.tr('Live', 'ክፍት'), icon: Icons.circle, background: AppColors.sage, foreground: AppColors.milk),
+              TextButton(onPressed: onUnpublish, child: Text(context.tr('Take my page offline', 'ገጼን ዝጋ'))),
+            ]),
+          ],
+        ),
+        if (optional.any((i) => !i.done)) shine,
+      ]);
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      DeskCard(
+        title: ready ? context.tr('Ready to go live', 'ለመክፈት ዝግጁ ነው') : context.tr("Let's get you live", 'ለመክፈት እንዘጋጅ'),
+        trailing: Text('$done / ${steps.length}', style: labelCaps()),
+        children: [
+          Text(ready
+              ? context.tr('Everything clients need is here. Publish, and they can find and book you.',
+                  'ደንበኞች የሚያስፈልጋቸው ሁሉ ተሟልቷል። ይክፈቱ፤ ያገኙዎታል፣ ቀጠሮም ይይዛሉ።')
+              : context.tr('Clients can find and book you once you publish. Finish these four steps first.',
+                  'ከከፈቱ በኋላ ደንበኞች ያገኙዎታል፣ ቀጠሮም ይይዛሉ። መጀመሪያ እነዚህን አራት እርምጃዎች ይጨርሱ።')),
+          const SizedBox(height: 14),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(value: done / steps.length, minHeight: 6),
+          ),
+          const SizedBox(height: 12),
+          for (var i = 0; i < steps.length; i++)
+            _StepRow(number: i + 1, step: steps[i], isNext: identical(steps[i], next), onOpen: onOpen),
+          const SizedBox(height: 8),
           FilledButton.icon(
             onPressed: ready && s.status != 'suspended' ? onPublish : null,
             icon: const Icon(Icons.rocket_launch_outlined),
@@ -391,22 +432,80 @@ class _Checklist extends StatelessWidget {
             ready
                 ? context.tr('You go live with a New badge. Our team verifies you in the background.',
                     'በ"አዲስ" ምልክት ይከፈታሉ። ቡድናችን በጎን ያረጋግጥዎታል።')
-                : context.tr('Finish the items marked * to publish.', '* ምልክት ያላቸውን ጨርሰው ይክፈቱ።'),
-            style: Theme.of(context).textTheme.bodySmall,
+                : context.tr('The Publish button turns on when all four steps are done.',
+                    'አራቱም እርምጃዎች ሲጠናቀቁ «ስቱዲዮዬን ክፈት» ይበራል።'),
+            style: t.textTheme.bodySmall,
           ),
         ],
-      ],
+      ),
+      shine,
+    ]);
+  }
+}
+
+/// One of the four steps to go live. The next one to do is highlighted
+/// and carries its own button.
+class _StepRow extends StatelessWidget {
+  final int number;
+  final LaunchStep step;
+  final bool isNext;
+  final ValueChanged<String> onOpen;
+  const _StepRow({required this.number, required this.step, required this.isNext, required this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final circle = Container(
+      width: 30,
+      height: 30,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: step.done ? AppColors.sage : (isNext ? AppColors.rouge : null),
+        border: step.done || isNext ? null : Border.all(color: AppColors.latte, width: 1.5),
+      ),
+      child: step.done
+          ? const Icon(Icons.check, size: 18, color: AppColors.milk)
+          : Text('$number',
+              style: TextStyle(
+                  fontFamily: 'DMSans',
+                  fontWeight: FontWeight.w700,
+                  color: isNext ? AppColors.milk : AppColors.taupe)),
     );
+    final row = Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: EdgeInsets.all(isNext ? 14 : 10),
+      decoration: isNext
+          ? BoxDecoration(color: AppColors.petal.withValues(alpha: 0.5), borderRadius: BorderRadius.circular(16))
+          : null,
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        circle,
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(step.title(context), style: t.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 2),
+            Text(step.hint(context), style: t.textTheme.bodySmall),
+            if (isNext) ...[
+              const SizedBox(height: 10),
+              FilledButton(onPressed: () => onOpen(step.tab), child: Text(step.action(context))),
+            ],
+          ]),
+        ),
+        if (!isNext) const Icon(Icons.chevron_right, color: AppColors.taupe),
+      ]),
+    );
+    if (isNext) return row;
+    return InkWell(borderRadius: BorderRadius.circular(16), onTap: () => onOpen(step.tab), child: row);
   }
 }
 
 class _Item {
   final bool done;
-  final bool required;
   final String title;
   final String subtitle;
   final String tab;
-  const _Item(this.done, this.required, this.title, this.subtitle, this.tab);
+  const _Item(this.done, this.title, this.subtitle, this.tab);
 }
 
 class _VerificationCard extends StatelessWidget {

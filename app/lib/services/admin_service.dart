@@ -1,6 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
+import '../config.dart';
 import '../models/models.dart';
+import '../platform/web_bridge.dart' as bridge;
 import 'activity.dart';
 import 'db.dart';
 import 'media_service.dart';
@@ -254,6 +257,20 @@ class AdminService {
   static String fill(String text, String name) {
     final first = name.trim().isEmpty ? '' : name.trim().split(RegExp(r'\s+')).first;
     return text.replaceAll('{first_name}', first.isEmpty ? 'there' : first);
+  }
+
+  /// Emails this admin every version of the getting-started series
+  /// (functions/lib/onboarding.js). Returns how many were sent.
+  static Future<int> previewOnboarding({required String lang}) async {
+    final idToken = await FirebaseAuth.instance.currentUser?.getIdToken();
+    final res = await bridge.postJson(AppConfig.emailsEndpoint, {
+      'action': 'preview',
+      'idToken': idToken,
+      'lang': lang,
+    });
+    Activity.log('admin_onboarding_preview', summary: lang);
+    final sent = res['sent'];
+    return sent is num ? sent.toInt() : 0;
   }
 
   /// Sends the message to the admin only, exactly as people will get it.

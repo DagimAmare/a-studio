@@ -30,6 +30,7 @@ class UserProfile {
   final String birthday; // MM-DD or ''
   final bool emailNotifs;
   final bool marketing;
+  final bool tips; // getting-started emails in the first week
   final String status; // active | suspended
   final bool emailVerified;
   final bool phoneVerified;
@@ -46,6 +47,7 @@ class UserProfile {
     required this.birthday,
     required this.emailNotifs,
     required this.marketing,
+    this.tips = true,
     required this.status,
     this.emailVerified = false,
     this.phoneVerified = false,
@@ -68,6 +70,7 @@ class UserProfile {
         birthday: _s(m['birthday']),
         emailNotifs: _b(_m(m['prefs'])['email'], true),
         marketing: _b(_m(m['prefs'])['marketing'], true),
+        tips: _b(_m(m['prefs'])['tips'], true),
         status: _s(m['status'], 'active'),
         emailVerified: _b(m['emailVerified']),
         phoneVerified: _b(m['phoneVerified']),

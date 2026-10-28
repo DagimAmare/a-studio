@@ -18,6 +18,11 @@
  *                        log clean-up
  *   phoneCode            one-time codes by SMS or Telegram (sign-in and
  *                        phone verification)
+ *   userCreated          the welcome email, and a place in the
+ *                        getting-started series (lib/onboarding.js) that
+ *                        `hourly` sends over the first week
+ *   emails               the "Stop these tips" link, and the Backstage
+ *                        preview of the series
  *   accountDeleted       removes what is left of a deleted account and
  *                        takes the name off past bookings, reviews, chats
  *
@@ -27,7 +32,7 @@
  */
 'use strict';
 
-const { onDocumentWritten } = require('firebase-functions/v2/firestore');
+const { onDocumentWritten, onDocumentCreated } = require('firebase-functions/v2/firestore');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onRequest } = require('firebase-functions/v2/https');
 const { setGlobalOptions } = require('firebase-functions/v2');
@@ -46,6 +51,7 @@ const { pushToUser } = require('./lib/push');
 const L = require('./lib/logic');
 const T = require('./lib/time');
 const eth = require('./lib/ethiopian');
+const onboarding = require('./lib/onboarding');
 
 initializeApp();
 const db = getFirestore();
@@ -78,6 +84,23 @@ function mailCfg() {
 const tr = (lang, en, am) => (lang === 'am' && am ? am : en);
 const now = () => Date.now();
 const ms = (t) => (t && typeof t.toMillis === 'function' ? t.toMillis() : 0);
+
+/** Public address of the `emails` function (the "Stop these tips" link). */
+const EMAILS_URL = `https://${REGION}-${process.env.GCLOUD_PROJECT || 'astudio-207'}.cloudfunctions.net/emails`;
+const unsubscribeUrl = (uid, token) => `${EMAILS_URL}?u=${encodeURIComponent(uid)}&t=${encodeURIComponent(token)}`;
+
+/** Sends now; if the mail server fails, the queue retries it later. */
+async function deliver(to, msg) {
+  const item = { to, subject: msg.subject, html: msg.html, text: msg.text, headers: msg.headers || {} };
+  try {
+    await email.send(mailCfg(), item);
+    return true;
+  } catch (e) {
+    logger.error('email failed, queued for retry', { to, error: String(e) });
+    await db.collection('mail_queue').add({ ...item, attempts: 1, createdAt: FieldValue.serverTimestamp() });
+    return false;
+  }
+}
 
 /** Server-made notification. Never called from notificationChanged. */
 function notify(toUid, { type, title, body, link = '/', refId = '', mail = true, extra = {} }) {
@@ -193,7 +216,7 @@ exports.drainQueues = onSchedule(
     for (const d of mails.docs) {
       const m = d.data();
       try {
-        await email.send(mailCfg(), { to: m.to, subject: m.subject, html: m.html, text: m.text });
+        await email.send(mailCfg(), { to: m.to, subject: m.subject, html: m.html, text: m.text, headers: m.headers });
         await d.ref.delete();
       } catch (e) {
         const attempts = (m.attempts || 0) + 1;
@@ -301,11 +324,107 @@ exports.studioChanged = onDocumentWritten('studios/{uid}', async (event) => {
 });
 
 // ======================================================================
-// hourly: expiry, reminders, completion nudges
+// getting-started series (lib/onboarding.js)
+// ======================================================================
+
+function newToken() {
+  return crypto.randomBytes(16).toString('hex');
+}
+
+/**
+ * Once: everyone who joined before the series existed gets it from the
+ * studio email on (no welcome), starting at the next 9 AM in Addis, with
+ * the usual spacing after that.
+ */
+async function enrolExistingAccounts(t) {
+  const cfgRef = db.doc('config/onboarding');
+  const cfg = (await cfgRef.get()).data() || {};
+  if (cfg.backfilledAt) return;
+  const first = onboarding.nextMorning(t);
+  const start = first - onboarding.STEPS[1].day * onboarding.DAY;
+  const users = await db.collection('users').limit(5000).get();
+  let enrolled = 0;
+  for (const u of users.docs) {
+    try {
+      await db.collection('drip').doc(u.id).create({
+        start: Timestamp.fromMillis(start),
+        step: 1,
+        nextAt: Timestamp.fromMillis(first),
+        token: newToken(),
+        source: 'existing',
+        sent: {},
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      enrolled++;
+    } catch (e) {
+      // Already in the series (signed up after the functions were deployed).
+    }
+  }
+  await cfgRef.set({ backfilledAt: FieldValue.serverTimestamp(), backfilled: enrolled }, { merge: true });
+  logger.info('getting-started series: existing accounts enrolled', { enrolled });
+}
+
+/** Queues every email in the series that is due, one step per person. */
+async function sendDueOnboarding(t) {
+  await enrolExistingAccounts(t);
+  const due = await db.collection('drip').where('nextAt', '<=', Timestamp.fromMillis(t)).limit(200).get();
+  const appUrl = APP_URL.value();
+  for (const d of due.docs) {
+    const drip = d.data();
+    const step = Number.isInteger(drip.step) ? drip.step : 1;
+    const user = await userData(d.id);
+    if (!user) {
+      await d.ref.delete();
+      continue;
+    }
+    if (step >= onboarding.STEPS.length || !onboarding.wantsTips(user)) {
+      await d.ref.update({ nextAt: FieldValue.delete(), done: true });
+      continue;
+    }
+    const key = onboarding.STEPS[step].key;
+    const studioSnap = await db.collection('studios').doc(d.id).get();
+    const studio = studioSnap.exists ? studioSnap.data() : null;
+    let looks = 0;
+    if (key === 'studio' && studio && studio.status !== 'live') {
+      looks = (await db.collection('looks').where('studioUid', '==', d.id).count().get()).data().count;
+    }
+    const msg = onboarding.compose(key, { user, studio, looks }, { appUrl, unsubscribeUrl: unsubscribeUrl(d.id, drip.token) });
+    if (msg) {
+      await db.collection('mail_queue').add({
+        to: user.email,
+        subject: msg.subject,
+        html: msg.html,
+        text: msg.text,
+        headers: msg.headers,
+        attempts: 0,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+    const next = step + 1;
+    const update = { step: next, [`sent.${key}`]: msg ? FieldValue.serverTimestamp() : 'skipped' };
+    if (next < onboarding.STEPS.length) {
+      const start = ms(drip.start) || t;
+      update.nextAt = Timestamp.fromMillis(onboarding.dueAt(start, next, msg ? t + onboarding.MIN_GAP : t));
+    } else {
+      update.nextAt = FieldValue.delete();
+      update.done = true;
+    }
+    await d.ref.update(update);
+  }
+}
+
+// ======================================================================
+// hourly: getting-started emails, expiry, reminders, completion nudges
 // ======================================================================
 
 exports.hourly = onSchedule({ schedule: 'every 60 minutes', timeZone: TIME_ZONE, timeoutSeconds: 300 }, async () => {
   const t = now();
+
+  try {
+    await sendDueOnboarding(t);
+  } catch (e) {
+    logger.error('getting-started emails failed', { error: String(e) });
+  }
 
   // Unanswered requests expire after 12 hours.
   const requested = await db.collection('bookings').where('status', '==', 'requested').limit(1000).get();
@@ -597,6 +716,118 @@ exports.phoneCode = onRequest(
 );
 
 // ======================================================================
+// userCreated: welcome email, and a place in the getting-started series
+// ======================================================================
+
+exports.userCreated = onDocumentCreated(
+  { document: 'users/{uid}', secrets: [SMTP_PASS], memory: '256MiB' },
+  async (event) => {
+    const uid = event.params.uid;
+    const user = event.data ? event.data.data() : null;
+    if (!user) return;
+    const t = now();
+    const start = ms(user.createdAt) || t;
+    const token = newToken();
+    const ref = db.collection('drip').doc(uid);
+    try {
+      await ref.create({
+        start: Timestamp.fromMillis(start),
+        step: 1,
+        nextAt: Timestamp.fromMillis(onboarding.dueAt(start, 1, t + onboarding.MIN_GAP)),
+        token,
+        source: 'signup',
+        sent: {},
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      return; // this event was delivered twice; the first one sent the welcome
+    }
+    if (!onboarding.wantsTips(user)) return;
+    const msg = onboarding.compose('welcome', { user, studio: null }, {
+      appUrl: APP_URL.value(),
+      unsubscribeUrl: unsubscribeUrl(uid, token),
+    });
+    if (!msg) return;
+    await deliver(user.email, msg);
+    await ref.update({ 'sent.welcome': FieldValue.serverTimestamp() });
+  },
+);
+
+// ======================================================================
+// emails: the "Stop these tips" link, and the Backstage preview
+// ======================================================================
+
+function sameToken(a, b) {
+  const x = Buffer.from(String(a || ''));
+  const y = Buffer.from(String(b || ''));
+  return x.length === y.length && x.length > 0 && crypto.timingSafeEqual(x, y);
+}
+
+async function sendPreview(req, res) {
+  const body = req.body || {};
+  let uid;
+  try {
+    uid = (await getAuth().verifyIdToken(String(body.idToken || ''))).uid;
+  } catch (e) {
+    return res.status(401).json({ error: 'Please sign in again.' });
+  }
+  if (!(await db.collection('admins').doc(uid).get()).exists) {
+    return res.status(403).json({ error: 'Backstage only.' });
+  }
+  const user = await userData(uid);
+  if (!user || !user.email) return res.status(400).json({ error: 'Your account has no email address.' });
+
+  // One preview run every 2 minutes, so a double tap does not send 24 emails.
+  const cfgRef = db.doc('config/onboarding');
+  const last = ms(((await cfgRef.get()).data() || {})[`previewAt_${uid}`]);
+  if (now() - last < 2 * 60000) return res.status(429).json({ error: 'A preview just went out. Check your inbox.' });
+  await cfgRef.set({ [`previewAt_${uid}`]: FieldValue.serverTimestamp() }, { merge: true });
+
+  const lang = body.lang === 'am' ? 'am' : 'en';
+  const samples = onboarding.previewSamples({ ...user, lang });
+  const appUrl = APP_URL.value();
+  let sent = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const s = samples[i];
+    const msg = onboarding.compose(s.key, s.ctx, { appUrl, preview: `Preview ${i + 1} of ${samples.length}: ${s.label}` });
+    if (!msg) continue;
+    await deliver(user.email, { ...msg, subject: `[Preview ${i + 1}/${samples.length}] ${msg.subject}`, headers: {} });
+    sent++;
+  }
+  return res.json({ ok: true, sent, to: user.email });
+}
+
+exports.emails = onRequest(
+  { cors: ['https://astudio.hepius.co'], maxInstances: 5, timeoutSeconds: 120, memory: '256MiB', secrets: [SMTP_PASS] },
+  async (req, res) => {
+    const body = req.body || {};
+    if (req.method === 'POST' && body.action === 'preview') return sendPreview(req, res);
+
+    const appUrl = APP_URL.value();
+    const uid = String(req.query.u || '');
+    const token = String(req.query.t || '');
+    const html = (page) => res.status(200).set('Content-Type', 'text/html; charset=utf-8').set('Cache-Control', 'no-store').send(page);
+    if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).send('GET or POST only.');
+
+    const user = /^[A-Za-z0-9_-]{6,128}$/.test(uid) ? await userData(uid) : null;
+    const lang = user && user.lang === 'am' ? 'am' : 'en';
+    const dripRef = uid ? db.collection('drip').doc(uid) : null;
+    const drip = dripRef ? (await dripRef.get()).data() : null;
+    if (!user || !drip || !sameToken(drip.token, token)) return html(onboarding.stopPage('invalid', { lang, appUrl }));
+
+    // GET only asks, so link scanners in mail systems cannot unsubscribe anyone.
+    // POST comes from the button on that page, or from the mail app's own
+    // one-click unsubscribe (List-Unsubscribe-Post).
+    if (req.method === 'GET') {
+      return html(onboarding.stopPage('ask', { lang, appUrl, action: unsubscribeUrl(uid, token) }));
+    }
+    await db.collection('users').doc(uid).update({ 'prefs.tips': false });
+    await dripRef.update({ nextAt: FieldValue.delete(), done: true, stoppedAt: FieldValue.serverTimestamp() });
+    return html(onboarding.stopPage('done', { lang, appUrl }));
+  },
+);
+
+// ======================================================================
 // accountDeleted: remove leftovers, take the name off shared records
 // ======================================================================
 
@@ -627,6 +858,7 @@ exports.accountDeleted = functionsV1.region(REGION).auth.user().onDelete(async (
   await del(db.collection('studios').doc(uid).collection('private'));
   await db.collection('studios').doc(uid).delete().catch(() => {});
   await db.collection('users').doc(uid).delete().catch(() => {});
+  await db.collection('drip').doc(uid).delete().catch(() => {});
 
   await db.collection('activity').add({
     actorUid: uid,

@@ -77,6 +77,11 @@ await ok('profile: save name, new phone, birthday', () => setDoc(doc(dbC, 'users
 await ok('profile: save without phone change', () => setDoc(doc(dbC, 'users', CLIENT),
   { name: 'Client Uno', phone: '+251922000000', birthday: '' }, { merge: true }));
 await ok('profile: language', () => setDoc(doc(dbC, 'users', CLIENT), { lang: 'am' }, { merge: true }));
+await ok('profile: getting-started tips off', () => setDoc(doc(dbC, 'users', CLIENT), { prefs: { tips: false } }, { merge: true }));
+await ok('profile: getting-started tips back on', () => setDoc(doc(dbC, 'users', CLIENT), { prefs: { tips: true } }, { merge: true }));
+await no('drip: owner cannot read her series state', () => getDoc(doc(dbC, 'drip', CLIENT)));
+await no('drip: owner cannot change her series state', () => setDoc(doc(dbC, 'drip', CLIENT), { step: 9 }));
+await no('drip: admin cannot write it from the app', () => setDoc(doc(dbAdm, 'drip', CLIENT), { step: 9 }));
 await ok('profile: photo', () => setDoc(doc(dbC, 'users', CLIENT), { photoUrl: media(CLIENT, hex + '.jpg') }, { merge: true }));
 await no('profile: cannot mark own phone verified', () => updateDoc(doc(dbC, 'users', CLIENT), { phoneVerified: true }));
 await no('profile: cannot change status', () => updateDoc(doc(dbC, 'users', CLIENT), { status: 'suspended' }));

@@ -28,9 +28,11 @@ Open https://console.firebase.google.com/project/astudio-207
 ## 3. Upload the website (you, after every new build)
 
 1. Claude builds `astudio-web.zip` in your A Studio folder.
-2. cPanel **File Manager** > open the `astudio.hepius.co` folder > **Upload** the zip.
-3. Right-click the zip > **Extract** into that same folder, overwrite everything. Delete the zip afterwards.
-4. Open https://astudio.hepius.co and press Ctrl+F5. The build label at the bottom of **Account** shows which build is live.
+2. cPanel **Domains**: the `astudio.hepius.co` row shows its **Document Root**. In **File Manager**, open exactly that folder.
+3. If an `astudio-web.zip` is already in it, delete it first. The uploader does not replace a file with the same name unless **Overwrite existing files** is ticked, and the old zip then gets extracted again (this is what happened on 26 Oct).
+4. **Upload** the zip and wait for the green 100%. Back in File Manager press **Reload**: the zip shows today's date.
+5. Right-click the zip > **Extract** into that same folder, overwrite everything. Then delete the zip.
+6. Open https://astudio.hepius.co/version.json: it shows the new version. Then open https://astudio.hepius.co and press Ctrl+F5. The build label at the bottom of **Account** shows which build is live.
 
 First time only: visiting https://astudio.hepius.co/api/upload.php should show `{"error":"POST only."}`. That means uploads are live.
 
@@ -79,7 +81,7 @@ Phone sign-in codes, "Phone verified" badges and SMS broadcasts are built and sw
 
 `flutter analyze` > `flutter test` > `flutter build web --release --no-wasm-dry-run --pwa-strategy=none` > copy the kill-switch service worker > zip with `tar` (never Compress-Archive) > you upload (step 3).
 
-## 8. Lock the browser API key to the site (you, once, after v0.1.3 is live)
+## 8. Lock the browser API key to the site (you, once, after v0.1.3 or later is live)
 
 The Firebase web API key ships inside the app, so anyone can copy it. Limiting it to A Studio's addresses stops other websites from using it. From v0.1.3 the server's own calls (uploads, link previews, the Backstage file check) send the site's address, so they keep working.
 

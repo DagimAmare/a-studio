@@ -185,7 +185,7 @@ class _WizardState extends State<_Wizard> {
         services: services,
       );
       if (!mounted) return;
-      toast(context, context.tr('Your studio is ready. Add photos, then publish.', 'ስቱዲዮዎ ዝግጁ ነው። ፎቶዎችን ጨምረው ይክፈቱ።'));
+      toast(context, context.tr('Studio created. Follow the steps below to go live.', 'ስቱዲዮዎ ተፈጥሯል። ለመክፈት ከታች ያሉትን እርምጃዎች ይከተሉ።'));
       context.go('/desk?tab=overview');
     } catch (e) {
       if (mounted) {
@@ -208,6 +208,16 @@ class _WizardState extends State<_Wizard> {
       context.tr('How clients reach you', 'ደንበኞች እንዴት ያግኙዎት'),
       context.tr('Your first services', 'የመጀመሪያ አገልግሎቶችዎ'),
     ];
+    final notes = [
+      context.tr('Four quick steps, about 10 minutes. Clients see this name and link, and you can change both later.',
+          'አራት አጭር እርምጃዎች፣ 10 ደቂቃ ያህል። ደንበኞች ይህን ስም እና ሊንክ ያያሉ፤ ሁለቱንም በኋላ መቀየር ይችላሉ።'),
+      context.tr('Pick what you do and where you work, so the right clients find you.',
+          'ትክክለኛ ደንበኞች እንዲያገኙዎት የሚሠሩትን እና የሚሠሩበትን ቦታ ይምረጡ።'),
+      context.tr('Clients use these to ask you a quick question before they book.',
+          'ደንበኞች ከመያዛቸው በፊት ፈጣን ጥያቄ ለመጠየቅ እነዚህን ይጠቀማሉ።'),
+      context.tr('Start with two or three. After this you add photos and publish, and you can change prices any time.',
+          'በሁለት ወይም በሦስት ይጀምሩ። ከዚህ በኋላ ፎቶዎችን ጨምረው ይከፍታሉ፤ ዋጋዎችን በማንኛውም ጊዜ መቀየር ይችላሉ።'),
+    ];
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 28),
       children: [
@@ -219,7 +229,9 @@ class _WizardState extends State<_Wizard> {
               Text(context.tr('STEP ${_step + 1} OF 4', 'ደረጃ ${_step + 1} ከ4'), style: labelCaps()),
               const SizedBox(height: 8),
               Text(titles[_step], style: t.textTheme.headlineLarge),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
+              Text(notes[_step], style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+              const SizedBox(height: 12),
               LinearProgressIndicator(value: (_step + 1) / 4),
               const SizedBox(height: 22),
               Card(

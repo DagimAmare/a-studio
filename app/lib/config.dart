@@ -9,7 +9,7 @@ class AppConfig {
   static const String supportEmail = 'brush@astudio.hepius.co';
 
   /// Shown at the bottom of Account so testers can confirm which build is live.
-  static const String buildLabel = 'v0.1.3 (build 4) · 25 Oct 2026';
+  static const String buildLabel = 'v0.1.4 (build 5) · 28 Oct 2026';
 
   /// Bump when the Terms or Privacy Policy change in a way users must accept.
   static const String termsVersion = '2026-10-24';
@@ -36,6 +36,7 @@ class AppConfig {
   static const String functionsBase =
       'https://europe-west1-astudio-207.cloudfunctions.net';
   static String get phoneCodeEndpoint => '$functionsBase/phoneCode';
+  static String get emailsEndpoint => '$functionsBase/emails';
 
   /// Sign in and phone checks with a one-time code. Turn on once an SMS or
   /// Telegram code provider is set up for the functions (see DEPLOY.md).

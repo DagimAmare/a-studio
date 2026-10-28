@@ -90,7 +90,7 @@ ${am ? 'ኤ ስቱዲዮ ደንበኞችን ከገለልተኛ ባለሙያዎ�
   return { subject: title, html, text };
 }
 
-async function send(cfg, { to, subject, html, text }) {
+async function send(cfg, { to, subject, html, text, headers }) {
   if (!cfg.host || !cfg.pass) throw new Error('Email is not configured (SMTP_HOST / SMTP_PASS).');
   return getTransport(cfg).sendMail({
     from: cfg.from,
@@ -99,7 +99,7 @@ async function send(cfg, { to, subject, html, text }) {
     subject,
     html,
     text,
-    headers: { 'X-Entity-Ref-ID': `astudio-${Date.now()}` },
+    headers: { 'X-Entity-Ref-ID': `astudio-${Date.now()}`, ...(headers || {}) },
   });
 }
 

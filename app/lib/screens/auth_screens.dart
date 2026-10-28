@@ -214,25 +214,64 @@ class _Consents extends StatelessWidget {
   }
 }
 
+/// Two big choices at the top of sign-up, so an artist cannot miss hers.
 class _RolePicker extends StatelessWidget {
   final String role;
   final ValueChanged<String> onChanged;
   const _RolePicker({required this.role, required this.onChanged});
+
   @override
-  Widget build(BuildContext context) => SegmentedButton<String>(
-        segments: [
-          ButtonSegment(
-              value: 'client',
-              icon: const Icon(Icons.favorite_border),
-              label: Text(context.tr('I want to book', 'ቀጠሮ መያዝ እፈልጋለሁ'))),
-          ButtonSegment(
-              value: 'artist',
-              icon: const Icon(Icons.brush_outlined),
-              label: Text(context.tr('I am an artist', 'ባለሙያ ነኝ'))),
-        ],
-        selected: {role},
-        onSelectionChanged: (v) => onChanged(v.first),
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    Widget choice(String value, IconData icon, String title, String hint) {
+      final selected = role == value;
+      return Expanded(
+        child: Semantics(
+          button: true,
+          selected: selected,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: () => onChanged(value),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: selected ? AppColors.petal.withValues(alpha: 0.55) : t.colorScheme.surface,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: selected ? AppColors.rouge : AppColors.line, width: selected ? 2 : 1),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Icon(icon, color: selected ? AppColors.rouge : AppColors.taupe),
+                  const Spacer(),
+                  Icon(selected ? Icons.check_circle : Icons.radio_button_unchecked,
+                      size: 20, color: selected ? AppColors.rouge : AppColors.latte),
+                ]),
+                const SizedBox(height: 10),
+                Text(title, style: t.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                Text(hint, style: t.textTheme.bodySmall),
+              ]),
+            ),
+          ),
+        ),
       );
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Text(context.tr('What brings you to A Studio?', 'ወደ ኤ ስቱዲዮ ምን አመጣዎት?'), style: t.textTheme.titleSmall),
+      const SizedBox(height: 10),
+      IntrinsicHeight(
+        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          choice('client', Icons.favorite_border, context.tr('I want to book', 'ቀጠሮ መያዝ እፈልጋለሁ'),
+              context.tr('Find and book makeup, nails and hair artists.', 'የሜካፕ፣ የጥፍር እና የፀጉር ባለሙያዎችን አግኝቼ መያዝ።')),
+          const SizedBox(width: 10),
+          choice('artist', Icons.brush_outlined, context.tr("I'm an artist", 'ባለሙያ ነኝ'),
+              context.tr('Open my studio and get booked. Free.', 'ስቱዲዮዬን ከፍቼ ቀጠሮ መቀበል። በነጻ።')),
+        ]),
+      ),
+    ]);
+  }
 }
 
 // ===================================================================== sign in

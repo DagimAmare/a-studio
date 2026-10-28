@@ -292,6 +292,15 @@ class _AccountState extends State<_Account> {
                     title: Text(context.tr('Holiday, wedding-season and birthday messages', 'የበዓል፣ የሠርግ ወቅት እና የልደት መልዕክቶች')),
                     subtitle: Text(context.tr('At most two a week. Turn off any time.', 'በሳምንት ቢበዛ ሁለት። በማንኛውም ጊዜ ያጥፉ።')),
                   ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: p?.tips ?? true,
+                    onChanged: (v) => _update({'prefs': {'tips': v}}),
+                    title: Text(context.tr('Getting-started tips by email', 'የመጀመሪያ ምክሮች በኢሜይል')),
+                    subtitle: Text(context.tr(
+                        'A few emails in your first week: opening a studio, The Vanity and how bookings work.',
+                        'በመጀመሪያው ሳምንትዎ ጥቂት ኢሜይሎች፡ ስቱዲዮ መክፈት፣ የውበት ሱቁ እና ቀጠሮ እንዴት እንደሚሠራ።')),
+                  ),
                   if (AppConfig.pushConfigured)
                     ValueListenableBuilder<bool>(
                       valueListenable: PushService.enabled,
