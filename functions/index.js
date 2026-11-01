@@ -809,9 +809,10 @@ exports.emails = onRequest(
     const html = (page) => res.status(200).set('Content-Type', 'text/html; charset=utf-8').set('Cache-Control', 'no-store').send(page);
     if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).send('GET or POST only.');
 
-    const user = /^[A-Za-z0-9_-]{6,128}$/.test(uid) ? await userData(uid) : null;
+    const validUid = /^[A-Za-z0-9_-]{6,128}$/.test(uid);
+    const user = validUid ? await userData(uid) : null;
     const lang = user && user.lang === 'am' ? 'am' : 'en';
-    const dripRef = uid ? db.collection('drip').doc(uid) : null;
+    const dripRef = validUid ? db.collection('drip').doc(uid) : null;
     const drip = dripRef ? (await dripRef.get()).data() : null;
     if (!user || !drip || !sameToken(drip.token, token)) return html(onboarding.stopPage('invalid', { lang, appUrl }));
 
