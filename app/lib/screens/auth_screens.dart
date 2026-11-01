@@ -107,12 +107,43 @@ class _OrDivider extends StatelessWidget {
       );
 }
 
+/// Google refuses sign-in inside app browsers (Instagram, TikTok,
+/// Facebook). There she gets a short explanation and the link to open in
+/// Chrome or Safari, instead of Google's "disallowed_useragent" error page.
+Future<void> _showOpenInBrowser(BuildContext context) => showDialog<void>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text(c.tr('Open A Studio in your browser', 'ኤ ስቱዲዮን በአሳሽዎ ይክፈቱ')),
+        content: Text(c.tr(
+            'Google does not allow signing in inside apps like Instagram, TikTok or Facebook. '
+                'Open this page in Chrome or Safari: tap the ⋯ menu and choose "Open in browser". '
+                'Or sign in here with your email and password.',
+            'Google እንደ ኢንስታግራም፣ ቲክቶክ ወይም ፌስቡክ ባሉ መተግበሪያዎች ውስጥ መግባትን አይፈቅድም። '
+                'ይህን ገጽ በChrome ወይም በSafari ይክፈቱ፡ ⋯ የሚለውን ተጭነው «Open in browser»ን ይምረጡ። '
+                'ወይም እዚሁ በኢሜይል እና በይለፍ ቃል ይግቡ።')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: Text(c.tr('OK', 'እሺ'))),
+          FilledButton.icon(
+            onPressed: () {
+              Navigator.pop(c);
+              copyText(context, Uri.base.toString(),
+                  done: context.tr('Link copied. Paste it in Chrome or Safari.', 'ሊንኩ ተቀድቷል። በChrome ወይም በSafari ይለጥፉት።'));
+            },
+            icon: const Icon(Icons.copy, size: 18),
+            label: Text(c.tr('Copy link', 'ሊንኩን ቅዳ')),
+          ),
+        ],
+      ),
+    );
+
 class _GoogleButton extends StatelessWidget {
   final VoidCallback? onPressed;
   const _GoogleButton({required this.onPressed});
   @override
   Widget build(BuildContext context) => OutlinedButton.icon(
-        onPressed: onPressed,
+        onPressed: onPressed == null
+            ? null
+            : () => AuthService.inEmbeddedBrowser ? _showOpenInBrowser(context) : onPressed!(),
         icon: const Text('G',
             style: TextStyle(fontFamily: 'DMSans', fontWeight: FontWeight.w600, fontSize: 18, color: AppColors.rouge)),
         label: Text(context.tr('Continue with Google', 'በGoogle ይቀጥሉ')),

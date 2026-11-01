@@ -394,3 +394,11 @@ void setDocumentTitle(String title) {
     html.document.title = title;
   } catch (_) {}
 }
+
+String userAgent() {
+  try {
+    return html.window.navigator.userAgent;
+  } catch (_) {
+    return '';
+  }
+}

@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../config.dart';
+import '../core/browser.dart';
+import '../l10n/tr.dart';
 import '../platform/media_types.dart';
 import '../platform/web_bridge.dart' as bridge;
 import 'activity.dart';
@@ -81,6 +83,10 @@ class AuthService {
         .timeout(Db.timeout);
     Activity.log('sign_in', summary: 'email');
   }
+
+  /// Instagram, TikTok, Facebook and other app browsers, where Google
+  /// refuses to sign anyone in.
+  static bool get inEmbeddedBrowser => isEmbeddedBrowser(bridge.userAgent());
 
   static Future<void> signInWithGoogle() async {
     await _auth.signInWithPopup(GoogleAuthProvider());
@@ -183,13 +189,30 @@ class AuthService {
         case 'popup-closed-by-user':
         case 'cancelled-popup-request':
           return 'Google sign-in was closed before finishing.';
+        case 'popup-blocked':
+          return _t('Your browser blocked the Google sign-in window. Allow pop-ups for this site and try again.',
+              'አሳሽዎ የGoogle መግቢያ መስኮቱን ከልክሏል። ለዚህ ድረ-ገጽ pop-up ፈቅደው እንደገና ይሞክሩ።');
+        case 'unauthorized-domain':
+          return _t('Google sign-in does not work on this page. Sign in with your email and password.',
+              'በዚህ ገጽ በGoogle መግባት አይሠራም። በኢሜይል እና በይለፍ ቃል ይግቡ።');
+        case 'operation-not-allowed':
+          return _t('Google sign-in is turned off right now. Sign in with your email and password.',
+              'በGoogle መግባት ለጊዜው ተዘግቷል። በኢሜይል እና በይለፍ ቃል ይግቡ።');
+        case 'web-storage-unsupported':
+          return _t('This browser blocks what Google sign-in needs. Open A Studio in Chrome or Safari, or use your email.',
+              'ይህ አሳሽ የGoogle መግቢያ የሚያስፈልገውን ይከለክላል። ኤ ስቱዲዮን በChrome ወይም በSafari ይክፈቱ፣ ወይም በኢሜይል ይግቡ።');
+        case 'account-exists-with-different-credential':
+          return _t('This email already has an A Studio account. Sign in with your email and password.',
+              'ይህ ኢሜይል የኤ ስቱዲዮ መለያ አለው። በኢሜይል እና በይለፍ ቃል ይግቡ።');
         case 'network-request-failed':
           return 'No connection. Check your internet and try again.';
         case 'requires-recent-login':
           return 'Please confirm it is you, then try again.';
       }
-      return e.message ?? 'Something went wrong. Try again.';
+      return 'Something went wrong (${e.code}). Try again.';
     }
     return 'Something went wrong. Try again.';
   }
+
+  static String _t(String en, String am) => LocaleController.instance.isAmharic ? am : en;
 }

@@ -11,7 +11,7 @@ Project: Firebase **astudio-207** · Website: **https://astudio.hepius.co** · E
 Open https://console.firebase.google.com/project/astudio-207
 
 1. **Authentication > Sign-in method**: turn on **Email/Password** and **Google**.
-2. **Authentication > Settings > Authorized domains**: add `astudio.hepius.co`.
+2. **Authentication > Settings > Authorized domains**: add `astudio.hepius.co`. Without it every Google sign-in fails ("This domain is not authorized for OAuth operations"); it was missing until 1 Nov 2026.
 3. **Authentication > Templates**: for each email (verification, password reset), set the sender name to `A Studio` and the reply-to to `brush@astudio.hepius.co`.
 4. **Firestore Database > Rules**: paste the whole of `firestore.rules` and press **Publish**. (Or let the deploy in step 4 do it.)
 5. **Cloud Messaging**: the Web Push key is already in the app. Nothing to do.

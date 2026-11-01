@@ -44,3 +44,5 @@ void downloadText(String filename, String text, {String mime = 'application/json
 void removeSplash() {}
 
 void setDocumentTitle(String title) {}
+
+String userAgent() => '';
