@@ -225,6 +225,15 @@ await ok('admin: broadcast batch', () => {
   }
   return b.commit();
 });
+await ok('admin: campaign with photos and a GIF', () => addDoc(collection(dbAdm, 'notifications'), {
+  toUid: CLIENT, fromUid: 'backstage', fromName: 'A Studio', type: 'campaign', title: 'Meskel glam', body: 'Book early',
+  link: '/explore', images: [{ url: media(ADMIN, hex + '.gif'), thumb: '' }, { url: media(ADMIN, hex + '.jpg'), thumb: media(ADMIN, hex + '_t.jpg') }],
+  email: true, sms: false, marketing: true, read: false, createdAt: serverTimestamp(),
+}));
+await ok('admin: template with pictures', () => addDoc(collection(dbAdm, 'templates'), {
+  name: 'Meskel pictures', titleEn: 'T', bodyEn: 'B', titleAm: '', bodyAm: '', link: '/',
+  images: [{ url: media(ADMIN, hex + '.gif'), thumb: '' }], updatedAt: serverTimestamp(),
+}));
 await ok('admin: templates', async () => {
   const r = await addDoc(collection(dbAdm, 'templates'), { name: 'Meskel', titleEn: 'T', bodyEn: 'B', titleAm: '', bodyAm: '', link: '/', updatedAt: serverTimestamp() });
   await setDoc(doc(dbAdm, 'templates', r.id), { name: 'Meskel 2', titleEn: 'T', bodyEn: 'B', titleAm: '', bodyAm: '', link: '/', updatedAt: serverTimestamp() });
@@ -257,6 +266,8 @@ await ok('booking: phone saved before request', () => setDoc(doc(dbC, 'users', C
 const b1 = doc(collection(dbC, 'bookings'));
 await ok('booking: client requests', () => setDoc(b1, bookingDoc()));
 await ok('booking: request notice to artist', () => note(dbC, CLIENT, ARTIST, 'booking_request', b1.id));
+await no('booking: a notice cannot carry pictures', () => note(dbC, CLIENT, ARTIST, 'booking_request', b1.id,
+  { images: [{ url: media(CLIENT, hex + '.gif'), thumb: '' }] }));
 await no('booking: notice to a stranger', () => note(dbC, CLIENT, STRANGER, 'booking_request', b1.id));
 await no('booking: wrong deposit percent', () => setDoc(doc(collection(dbC, 'bookings')), bookingDoc({ depositPercent: 0, depositAmount: 0 })));
 await no('booking: cannot book a draft studio', async () => {

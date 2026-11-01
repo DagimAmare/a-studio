@@ -155,6 +155,7 @@ exports.notificationChanged = onDocumentWritten(
     const marketing = after.type === 'campaign' || after.type === 'birthday';
     if (marketing && prefs.marketing !== true) return;
     const appUrl = APP_URL.value();
+    const images = L.campaignImages(after, appUrl);
 
     // Push: marketing waits out quiet hours (the in-app notice stays).
     if (!(marketing && T.quietHours())) {
@@ -165,6 +166,7 @@ exports.notificationChanged = onDocumentWritten(
           link: after.link,
           tag: after.type === 'message' ? event.params.notifId : after.type,
           appUrl,
+          image: images.length ? images[0].thumb || images[0].url : undefined,
         });
       } catch (e) {
         logger.warn('push failed', { toUid, error: String(e) });
@@ -181,6 +183,7 @@ exports.notificationChanged = onDocumentWritten(
         lang: user.lang,
         kind: marketing ? 'marketing' : 'service',
         name: L.firstName(user.name),
+        images,
       });
       if (marketing) {
         await db.collection('mail_queue').add({ to: user.email, ...msg, attempts: 0, createdAt: FieldValue.serverTimestamp() });

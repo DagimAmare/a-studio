@@ -95,3 +95,18 @@ test('rate limiter', () => {
   assert.equal(L.allowHit(hits, 5, 3600000, now + 10).ok, false);
   assert.equal(L.allowHit(hits, 5, 3600000, now + 3600001 + 10).ok, true);
 });
+
+test('campaign images: Backstage only, our media only, at most 4', () => {
+  const app = 'https://astudio.hepius.co';
+  const m = (name) => `${app}/media/AdminUid0000000000000000000A/${name}`;
+  const good = { url: m('0123456789abcdef0123456789abcdef.jpg'), thumb: m('0123456789abcdef0123456789abcdef_t.jpg') };
+  const gif = { url: m('fedcba9876543210fedcba9876543210.gif'), thumb: '' };
+  const note = (images, fromUid = 'backstage') => ({ fromUid, images });
+  assert.deepEqual(L.campaignImages(note([good, gif]), app), [good, gif]);
+  assert.deepEqual(L.campaignImages(note([good], 'SomeUserUid0000000000000000'), app), []);
+  assert.deepEqual(L.campaignImages({ fromUid: 'backstage' }, app), []);
+  assert.deepEqual(L.campaignImages(note([{ url: 'https://evil.example/x.gif' }, { url: m('../../x.jpg') }, { url: m('x.php') }, 'x', null]), app), []);
+  assert.deepEqual(L.campaignImages(note([{ url: good.url, thumb: 'https://evil.example/t.jpg' }]), app), [{ url: good.url, thumb: '' }]);
+  assert.equal(L.campaignImages(note([good, gif, good, gif, good, gif]), app).length, 4);
+  assert.deepEqual(L.campaignImages(note([good]), 'https://other.example'), []);
+});

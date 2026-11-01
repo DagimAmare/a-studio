@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import '../../config.dart';
 import '../../core/ethiopian.dart';
 import '../../core/format.dart';
+import '../../models/models.dart';
 import '../../services/admin_service.dart';
+import '../../services/auth_service.dart';
+import '../../services/media_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/colors.dart';
 import '../../widgets/common.dart';
@@ -69,6 +72,9 @@ class _BroadcastTabState extends State<BroadcastTab> {
   bool _marketing = true;
   int? _reach;
   String _templateId = '';
+  final List<CampaignImage> _images = [];
+  bool _uploading = false;
+  double _progress = 0;
 
   @override
   void initState() {
@@ -97,7 +103,47 @@ class _BroadcastTabState extends State<BroadcastTab> {
         _titleAm.text = t.titleAm;
         _bodyAm.text = t.bodyAm;
         _link.text = t.link.isEmpty ? '/' : t.link;
+        _images
+          ..clear()
+          ..addAll(t.images);
       });
+
+  Future<void> _addImages() async {
+    final room = CampaignImage.max - _images.length;
+    if (room <= 0) return;
+    List<PickedMedia> picked;
+    try {
+      picked = await MediaService.pickImages();
+    } catch (e) {
+      if (mounted) toast(context, AuthService.friendlyError(e));
+      return;
+    }
+    if (picked.isEmpty || !mounted) return;
+    if (picked.length > room) toast(context, 'Added the first $room. A message can carry ${CampaignImage.max} pictures.');
+    setState(() {
+      _uploading = true;
+      _progress = 0;
+    });
+    try {
+      for (final m in picked.take(room)) {
+        if (m.mime == 'image/gif' && m.size > 2 * 1024 * 1024) {
+          toast(context, '"${m.name}" is ${(m.size / 1048576).toStringAsFixed(1)} MB. GIFs under 2 MB load faster on phones.');
+        }
+        final img = await AdminService.uploadCampaignImage(m, onProgress: (f) {
+          if (mounted) setState(() => _progress = f);
+        });
+        if (!mounted) return;
+        setState(() {
+          _images.add(img);
+          _progress = 0;
+        });
+      }
+    } catch (e) {
+      if (mounted) toast(context, AuthService.friendlyError(e));
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
 
   Future<void> _saveTemplate() async {
     final name = await textPrompt(context, title: 'Template name', hint: 'Genna reminder', maxLines: 1, required: true);
@@ -112,12 +158,14 @@ class _BroadcastTabState extends State<BroadcastTab> {
         titleAm: _titleAm.text.trim(),
         bodyAm: _bodyAm.text.trim(),
         link: _link.text.trim(),
+        images: List.of(_images),
       )),
       success: 'Template saved',
     );
   }
 
   String? _problem() {
+    if (_uploading) return 'Wait for the pictures to finish uploading.';
     if (_title.text.trim().length < 3) return 'Write a title.';
     if (_body.text.trim().length < 5) return 'Write the message.';
     final link = _link.text.trim();
@@ -133,7 +181,12 @@ class _BroadcastTabState extends State<BroadcastTab> {
     }
     await Busy.run(
       context,
-      () => AdminService.sendTest(title: _title.text.trim(), body: _body.text.trim(), link: _link.text.trim(), email: _email),
+      () => AdminService.sendTest(
+          title: _title.text.trim(),
+          body: _body.text.trim(),
+          link: _link.text.trim(),
+          email: _email,
+          images: List.of(_images)),
       success: 'Test sent to you. Check your notifications and email.',
     );
   }
@@ -156,7 +209,8 @@ class _BroadcastTabState extends State<BroadcastTab> {
             width: 420,
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('Up to $reach people (${_marketing ? 'only those who opted in to offers' : 'everyone, as a service message'}). '
-                  'In-app and push${_email ? ', plus email' : ''}${_sms ? ', plus SMS (paid)' : ''}.'),
+                  'In-app and push${_email ? ', plus email' : ''}${_sms ? ', plus SMS (paid)' : ''}'
+                  '${_images.isEmpty ? '' : ', with ${_images.length} ${_images.length == 1 ? 'picture' : 'pictures'}'}.'),
               const SizedBox(height: 8),
               if (_email)
                 const Text('Emails go out gradually (a few hundred an hour) to stay inside the mail server limits.'),
@@ -190,6 +244,7 @@ class _BroadcastTabState extends State<BroadcastTab> {
         email: _email,
         sms: _sms,
         marketingOnly: _marketing,
+        images: List.of(_images),
       ),
     );
     if (sent != null && mounted) toast(context, 'Sent to $sent people');
@@ -263,6 +318,40 @@ class _BroadcastTabState extends State<BroadcastTab> {
                 controller: _link,
                 decoration: const InputDecoration(labelText: 'Opens this page', hintText: '/explore?occasion=bridal'),
               ),
+              const SizedBox(height: 16),
+              Text('Photos and GIFs (optional)', style: t.textTheme.titleSmall),
+              const SizedBox(height: 4),
+              Text(
+                  'Up to ${CampaignImage.max}. The first one shows large at the top of the email and in the app; '
+                  'the rest follow the message. GIFs play in most email apps. Tap a picture to put it first.',
+                  style: t.textTheme.bodySmall),
+              const SizedBox(height: 10),
+              Wrap(spacing: 10, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                for (var i = 0; i < _images.length; i++)
+                  _PictureTile(
+                    image: _images[i],
+                    first: i == 0,
+                    onFirst: i == 0
+                        ? null
+                        : () => setState(() {
+                              final x = _images.removeAt(i);
+                              _images.insert(0, x);
+                            }),
+                    onRemove: () => setState(() => _images.removeAt(i)),
+                  ),
+                if (_uploading)
+                  SizedBox(
+                    width: 96,
+                    height: 96,
+                    child: Center(child: CircularProgressIndicator(value: _progress > 0 ? _progress : null)),
+                  )
+                else if (_images.length < CampaignImage.max)
+                  OutlinedButton.icon(
+                    onPressed: _addImages,
+                    icon: const Icon(Icons.add_photo_alternate_outlined),
+                    label: Text(_images.isEmpty ? 'Add photos or GIFs' : 'Add more'),
+                  ),
+              ]),
               const SizedBox(height: 8),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
@@ -309,11 +398,15 @@ class _BroadcastTabState extends State<BroadcastTab> {
         ListenableBuilder(
           listenable: Listenable.merge([_title, _body]),
           builder: (context, _) => Card(
-            child: ListTile(
-              leading: const Icon(Icons.campaign_outlined),
-              title: Text(AdminService.fill(_title.text, 'Selam Tesfaye')),
-              subtitle: Text(AdminService.fill(_body.text, 'Selam Tesfaye')),
-            ),
+            clipBehavior: Clip.antiAlias,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              if (_images.isNotEmpty) NetImage(_images.first.url, height: 220, fit: BoxFit.cover),
+              ListTile(
+                leading: const Icon(Icons.campaign_outlined),
+                title: Text(AdminService.fill(_title.text, 'Selam Tesfaye')),
+                subtitle: Text(AdminService.fill(_body.text, 'Selam Tesfaye')),
+              ),
+            ]),
           ),
         ),
         const SizedBox(height: 28),
@@ -393,6 +486,54 @@ class CalendarTab extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// One picture on a draft: tap to put it first, x to take it off.
+class _PictureTile extends StatelessWidget {
+  final CampaignImage image;
+  final bool first;
+  final VoidCallback? onFirst;
+  final VoidCallback onRemove;
+  const _PictureTile({required this.image, required this.first, required this.onFirst, required this.onRemove});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 96,
+      height: 96,
+      child: Stack(children: [
+        Positioned.fill(
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: onFirst,
+            child: NetImage(image.small, radius: BorderRadius.circular(14)),
+          ),
+        ),
+        if (first || image.isGif)
+          Positioned(
+            left: 6,
+            bottom: 6,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(color: AppColors.espresso.withValues(alpha: 0.8), borderRadius: BorderRadius.circular(6)),
+              child: Text([if (first) 'TOP', if (image.isGif) 'GIF'].join(' · '),
+                  style: labelCaps(color: AppColors.milk, size: 10, spacing: 1)),
+            ),
+          ),
+        Positioned(
+          right: 2,
+          top: 2,
+          child: IconButton.filledTonal(
+            tooltip: 'Take off',
+            visualDensity: VisualDensity.compact,
+            iconSize: 16,
+            onPressed: onRemove,
+            icon: const Icon(Icons.close),
+          ),
+        ),
+      ]),
     );
   }
 }

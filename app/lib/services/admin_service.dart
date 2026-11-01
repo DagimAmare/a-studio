@@ -19,6 +19,7 @@ class MessageTemplate {
   final String titleAm;
   final String bodyAm;
   final String link;
+  final List<CampaignImage> images;
   const MessageTemplate({
     required this.id,
     required this.name,
@@ -27,6 +28,7 @@ class MessageTemplate {
     required this.titleAm,
     required this.bodyAm,
     required this.link,
+    this.images = const [],
   });
 
   factory MessageTemplate.fromDoc(DocumentSnapshot<Map<String, dynamic>> d) {
@@ -40,6 +42,7 @@ class MessageTemplate {
       titleAm: s('titleAm'),
       bodyAm: s('bodyAm'),
       link: s('link'),
+      images: CampaignImage.listFrom(m['images']),
     );
   }
 }
@@ -230,6 +233,7 @@ class AdminService {
       'titleAm': t.titleAm,
       'bodyAm': t.bodyAm,
       'link': t.link,
+      'images': t.images.map((i) => i.toMap()).toList(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
     if (t.id.isEmpty) {
@@ -273,12 +277,26 @@ class AdminService {
     return sent is num ? sent.toInt() : 0;
   }
 
+  /// A photo or GIF for a campaign. It goes to the admin's own media
+  /// folder, like any upload; sent emails keep pointing at it, so it is
+  /// never deleted when it is taken off a draft.
+  static Future<CampaignImage> uploadCampaignImage(PickedMedia media,
+      {void Function(double fraction)? onProgress}) async {
+    final up = await MediaService.upload(media, onProgress: onProgress);
+    Activity.log('admin_campaign_image', summary: up.url);
+    return CampaignImage(up.url, up.thumbUrl);
+  }
+
+  static List<Map<String, dynamic>> _imageMaps(List<CampaignImage> images) =>
+      images.take(CampaignImage.max).map((i) => i.toMap()).toList();
+
   /// Sends the message to the admin only, exactly as people will get it.
   static Future<void> sendTest({
     required String title,
     required String body,
     required String link,
     required bool email,
+    List<CampaignImage> images = const [],
   }) async {
     final s = Session.instance;
     await Db.notifications.add({
@@ -289,6 +307,7 @@ class AdminService {
       'title': '[Test] ${fill(title, s.displayName)}',
       'body': fill(body, s.displayName),
       'link': link,
+      if (images.isNotEmpty) 'images': _imageMaps(images),
       'email': email,
       'read': false,
       'createdAt': FieldValue.serverTimestamp(),
@@ -322,7 +341,9 @@ class AdminService {
     required bool email,
     bool sms = false,
     bool marketingOnly = true,
+    List<CampaignImage> images = const [],
   }) async {
+    final pics = _imageMaps(images);
     Query<Map<String, dynamic>> q = Db.users;
     if (audience == 'clients') q = q.where('role', isEqualTo: 'client');
     if (audience == 'artists') q = q.where('role', isEqualTo: 'artist');
@@ -345,6 +366,7 @@ class AdminService {
         'title': fill(am ? titleAm : title, name),
         'body': fill(am && bodyAm.trim().isNotEmpty ? bodyAm : body, name),
         'link': link,
+        if (pics.isNotEmpty) 'images': pics,
         'email': email,
         'sms': sms,
         'marketing': marketingOnly,
@@ -361,7 +383,8 @@ class AdminService {
     }
     if (inBatch > 0) await batch.commit().timeout(const Duration(seconds: 60));
     Activity.log('admin_broadcast',
-        targetType: 'audience', targetId: audience, summary: '$title ($total people, email: $email, sms: $sms)');
+        targetType: 'audience', targetId: audience,
+        summary: '$title ($total people, email: $email, sms: $sms, pictures: ${pics.length})');
     return total;
   }
 }

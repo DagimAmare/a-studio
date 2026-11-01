@@ -121,20 +121,31 @@ class _NotificationsState extends State<_Notifications> {
                               child: const Icon(Icons.delete_outline, color: AppColors.milk),
                             ),
                             onDismissed: (_) => NotificationService.delete(list[i].id).catchError((_) {}),
-                            child: ListTile(
-                              tileColor: list[i].read ? null : AppColors.petal.withValues(alpha: 0.35),
-                              leading: Icon(_iconFor(list[i].type)),
-                              title: Text(list[i].title,
-                                  style: list[i].read
-                                      ? t.textTheme.titleSmall
-                                      : t.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-                              subtitle: Text(
-                                [if (list[i].body.isNotEmpty) list[i].body, timeAgo(list[i].createdAt)].join('\n'),
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
+                            child: Material(
+                              color: list[i].read ? Colors.transparent : AppColors.petal.withValues(alpha: 0.35),
+                              child: InkWell(
+                                onTap: () => _open(list[i]),
+                                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                                  ListTile(
+                                    leading: Icon(_iconFor(list[i].type)),
+                                    title: Text(list[i].title,
+                                        style: list[i].read
+                                            ? t.textTheme.titleSmall
+                                            : t.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                                    subtitle: Text(
+                                      [if (list[i].body.isNotEmpty) list[i].body, timeAgo(list[i].createdAt)].join('\n'),
+                                      maxLines: 3,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    isThreeLine: list[i].body.isNotEmpty,
+                                  ),
+                                  if (list[i].images.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.fromLTRB(72, 0, 16, 16),
+                                      child: _NoticePictures(images: list[i].images),
+                                    ),
+                                ]),
                               ),
-                              isThreeLine: list[i].body.isNotEmpty,
-                              onTap: () => _open(list[i]),
                             ),
                           ),
                         ],
@@ -146,6 +157,32 @@ class _NotificationsState extends State<_Notifications> {
           ],
         );
       },
+    );
+  }
+}
+
+/// Pictures on a Backstage message: one large, or a row of tiles.
+class _NoticePictures extends StatelessWidget {
+  final List<CampaignImage> images;
+  const _NoticePictures({required this.images});
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(14);
+    if (images.length == 1) {
+      return ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: NetImage(images.first.url, height: 220, fit: BoxFit.cover, radius: radius),
+      );
+    }
+    return SizedBox(
+      height: 140,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: images.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (c, i) => NetImage(images[i].small, width: 140, height: 140, radius: radius),
+      ),
     );
   }
 }

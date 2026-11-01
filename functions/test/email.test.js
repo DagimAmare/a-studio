@@ -39,3 +39,21 @@ test('sms parts', () => {
   assert.equal(sms.smsParts('ሰ'.repeat(70)), 1);
   assert.equal(sms.smsParts('ሰ'.repeat(71)), 2);
 });
+
+test('campaign email with photos and GIFs', () => {
+  const app = 'https://astudio.hepius.co';
+  const images = [
+    { url: `${app}/media/u/a.gif`, thumb: '' },
+    { url: `${app}/media/u/b.jpg`, thumb: `${app}/media/u/b_t.jpg` },
+  ];
+  const m = email.render({ appUrl: app, title: 'Meskel glam "now"', body: 'Book early.', link: '/explore', kind: 'marketing', images });
+  const hero = m.html.indexOf(`src="${app}/media/u/a.gif"`);
+  const text = m.html.indexOf('Book early.');
+  const second = m.html.indexOf(`src="${app}/media/u/b_t.jpg"`);
+  assert.ok(hero > 0 && hero < text && text < second, 'first image above the text, the rest below');
+  assert.ok(!m.html.includes(`src="${app}/media/u/b.jpg"`), 'later images use the lighter copy');
+  assert.ok(m.html.includes('alt="Meskel glam &quot;now&quot;"'));
+  assert.equal((m.html.match(new RegExp(`href="${app}/explore"`, 'g')) || []).length, 3, 'both images and the button open the page');
+  const plain = email.render({ appUrl: app, title: 'T', body: 'B', link: '/' });
+  assert.ok(!plain.html.includes('<img'));
+});

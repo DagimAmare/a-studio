@@ -346,9 +346,11 @@ service cloud.firestore {
 
     function noteOk(notifId) {
       let d = request.resource.data;
+      // Pictures belong to Backstage campaigns only (admins skip noteOk).
       return d.fromUid == request.auth.uid
           && d.toUid is string && d.toUid != request.auth.uid
           && d.read == false
+          && !d.keys().hasAny(['images'])
           && str(d.title, 200) && str(d.body, 600) && str(d.get('link', ''), 300)
           && (
             (d.type == 'message'

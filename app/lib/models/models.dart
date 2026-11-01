@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../config.dart';
+
 DateTime? tsToDate(Object? v) {
   if (v is Timestamp) return v.toDate();
   if (v is DateTime) return v;
@@ -744,6 +746,38 @@ class ChatMessage {
 
 // ---------------------------------------------------------------- notifications
 
+/// A photo or GIF on a Backstage campaign: shown in the app, on the
+/// phone alert and in the email (functions/lib/logic.js campaignImages).
+class CampaignImage {
+  final String url;
+  final String thumb; // 640 px copy for photos; empty for GIFs
+  const CampaignImage(this.url, [this.thumb = '']);
+
+  static const int max = 4;
+
+  /// The lighter copy for small tiles; GIFs keep the original so they move.
+  String get small => thumb.isNotEmpty ? thumb : url;
+  bool get isGif => url.toLowerCase().endsWith('.gif');
+
+  Map<String, dynamic> toMap() => {'url': url, 'thumb': thumb};
+
+  /// Only files from our own media folder, at most [max].
+  static List<CampaignImage> listFrom(Object? v) {
+    if (v is! List) return const [];
+    final base = '${AppConfig.productionUrl}/media/';
+    final out = <CampaignImage>[];
+    for (final x in v) {
+      if (x is! Map) continue;
+      final url = x['url'];
+      if (url is! String || !url.startsWith(base)) continue;
+      final thumb = x['thumb'];
+      out.add(CampaignImage(url, thumb is String && thumb.startsWith(base) ? thumb : ''));
+      if (out.length == max) break;
+    }
+    return out;
+  }
+}
+
 class AppNotification {
   final String id;
   final String toUid;
@@ -755,6 +789,7 @@ class AppNotification {
   final String link;
   final bool read;
   final DateTime? createdAt;
+  final List<CampaignImage> images;
 
   const AppNotification({
     required this.id,
@@ -767,6 +802,7 @@ class AppNotification {
     required this.link,
     required this.read,
     this.createdAt,
+    this.images = const [],
   });
 
   factory AppNotification.fromDoc(DocumentSnapshot<Map<String, dynamic>> d) {
@@ -782,6 +818,9 @@ class AppNotification {
       link: _s(m['link']),
       read: _b(m['read']),
       createdAt: tsToDate(m['createdAt']),
+      // Only Backstage messages carry pictures (the rules keep the field
+      // off everything else).
+      images: _s(m['fromUid']) == 'backstage' ? CampaignImage.listFrom(m['images']) : const [],
     );
   }
 }

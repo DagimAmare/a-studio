@@ -41,11 +41,19 @@ function absoluteLink(appUrl, link) {
   return appUrl + link;
 }
 
+/** A campaign photo or GIF, full width of the card, linking to the page. */
+function imageHtml(src, href, alt, margin) {
+  return `<a href="${esc(href)}" style="display:block;margin:${margin};text-decoration:none;border:0">`
+    + `<img src="${esc(src)}" alt="${esc(alt)}" width="504" style="display:block;width:100%;max-width:504px;height:auto;border:0;outline:none;border-radius:14px"></a>`;
+}
+
 /**
  * Builds { subject, html, text } for one notification.
  * kind: 'service' (booking updates) or 'marketing' (campaigns, birthdays).
+ * images: [{ url, thumb }] from a Backstage campaign (logic.campaignImages);
+ * the first shows full size under the title, the rest after the text.
  */
-function render({ appUrl, title, body, link, lang = 'en', kind = 'service', name = '' }) {
+function render({ appUrl, title, body, link, lang = 'en', kind = 'service', name = '', images = [] }) {
   const am = lang === 'am';
   const url = absoluteLink(appUrl, link);
   const greeting = name ? (am ? `ሰላም ${name}፣` : `Selam ${name},`) : (am ? 'ሰላም፣' : 'Selam,');
@@ -63,6 +71,9 @@ function render({ appUrl, title, body, link, lang = 'en', kind = 'service', name
     .filter(Boolean)
     .map((p) => `<p style="margin:0 0 14px;font-size:16px;line-height:1.6;color:#3A2A24">${esc(p)}</p>`)
     .join('');
+  const pics = Array.isArray(images) ? images : [];
+  const hero = pics.length > 0 ? imageHtml(pics[0].url, url, title, '0 0 22px') : '';
+  const more = pics.slice(1).map((i) => imageHtml(i.thumb || i.url, url, title, '8px 0 14px')).join('');
 
   const html = `<!doctype html>
 <html lang="${am ? 'am' : 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -77,7 +88,7 @@ function render({ appUrl, title, body, link, lang = 'en', kind = 'service', name
 <tr><td style="padding:28px 28px 8px;font-family:'DM Sans',-apple-system,'Segoe UI',Roboto,'Noto Sans Ethiopic',Nyala,Arial,sans-serif">
 <p style="margin:0 0 12px;font-size:15px;color:#7A6A60">${esc(greeting)}</p>
 <h1 style="margin:0 0 16px;font-family:Georgia,'Times New Roman',serif;font-weight:bold;font-size:24px;line-height:1.3;color:#1E1512">${esc(title)}</h1>
-${paragraphs}
+${hero}${paragraphs}${more}
 <p style="margin:22px 0 26px"><a href="${esc(url)}" style="display:inline-block;background:#9E2A3A;color:#FFFFFF;text-decoration:none;padding:13px 26px;border-radius:999px;font-size:15px">${esc(button)}</a></p>
 </td></tr>
 <tr><td style="padding:16px 28px 24px;border-top:1px solid #EFE6DC;font-family:'DM Sans',-apple-system,'Segoe UI',Roboto,'Noto Sans Ethiopic',Arial,sans-serif;font-size:12px;line-height:1.6;color:#7A6A60">

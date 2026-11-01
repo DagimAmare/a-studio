@@ -121,6 +121,24 @@ function allowHit(hits, max, windowMs, now = Date.now()) {
   return { ok: recent.length < max, hits: [...recent, now].slice(-max * 2) };
 }
 
+/**
+ * Photos and GIFs on a Backstage campaign. Only notifications an admin
+ * wrote (fromUid 'backstage', which the rules keep from everyone else)
+ * carry them, only from our own media folder, and at most 4.
+ */
+function campaignImages(note, appUrl) {
+  if (!note || note.fromUid !== 'backstage' || !Array.isArray(note.images)) return [];
+  const host = String(appUrl || '').replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+  const media = new RegExp(`^${host}\\/media\\/[A-Za-z0-9_-]{6,128}\\/[A-Za-z0-9_-]{1,100}\\.(jpg|png|webp|gif)$`);
+  const out = [];
+  for (const i of note.images) {
+    if (!i || typeof i !== 'object' || typeof i.url !== 'string' || !media.test(i.url)) continue;
+    out.push({ url: i.url, thumb: typeof i.thumb === 'string' && media.test(i.thumb) ? i.thumb : '' });
+    if (out.length === 4) break;
+  }
+  return out;
+}
+
 function firstName(name) {
   const n = String(name || '').trim();
   return n ? n.split(/\s+/)[0] : '';
@@ -129,4 +147,5 @@ function firstName(name) {
 module.exports = {
   OPEN, busyIntervals, ratingSummary, shouldEmail, isFreshNotification, marketingAllowed, trimLog,
   reminderDue, requestExpired, completionNudgeDue, newCode, codeHash, normalizePhone, allowHit, firstName,
+  campaignImages,
 };

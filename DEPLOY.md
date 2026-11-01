@@ -94,3 +94,15 @@ The Firebase web API key ships inside the app, so anyone can copy it. Limiting i
 5. Tell Claude, who checks link previews and that the key now refuses other sites. Then test on https://astudio.hepius.co: sign in with Google, upload a photo, open a verification file in Backstage, and open the link in a password reset email.
 
 To undo it, set **Application restrictions** back to **None** and save.
+
+## 9. Show the A Studio logo next to emails in Gmail (you, once)
+
+Gmail shows the letter "A" next to A Studio emails because `brush@astudio.hepius.co` has no Google profile picture. Giving that address its own Google Account with the logo as its photo fixes it for Gmail readers (other mail apps use their own systems).
+
+1. Open https://accounts.google.com/signup in a private window. First name `A`, last name `Studio`.
+2. At "Choose your Gmail address" (or "How you'll sign in"), choose **Use your existing email** and type `brush@astudio.hepius.co`.
+3. Google emails a code to brush@. Open it in cPanel > **Email Accounts** > brush@ > **Check Email** (webmail), type the code, and finish with a new password of your own.
+4. Go to https://myaccount.google.com > **Personal info** > **Profile picture**, upload `brand/a-studio-avatar.png` from the A Studio folder, and keep it **visible to anyone**.
+5. Gmail picks it up within a day or two, for new and earlier emails.
+
+The other way, BIMI, shows the logo across more mail apps but needs a strict DMARC policy and a paid mark certificate (VMC or CMC) from a certificate authority. Not worth it yet.

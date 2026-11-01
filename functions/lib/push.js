@@ -12,7 +12,7 @@ const DEAD = new Set([
  * Sends one notification to every device the person turned push on for,
  * and deletes tokens FCM says are dead. Returns the number delivered.
  */
-async function pushToUser(db, messaging, uid, { title, body, link, tag, appUrl }) {
+async function pushToUser(db, messaging, uid, { title, body, link, tag, appUrl, image }) {
   const snap = await db.collection('users').doc(uid).collection('push_tokens').limit(MAX_TOKENS).get();
   if (snap.empty) return 0;
   const docs = snap.docs.filter((d) => typeof d.get('token') === 'string' && d.get('token'));
@@ -28,6 +28,7 @@ async function pushToUser(db, messaging, uid, { title, body, link, tag, appUrl }
         badge: `${appUrl}/icons/Icon-192.png`,
         tag: tag || 'astudio',
         renotify: true,
+        ...(image ? { image } : {}),
       },
       fcmOptions: { link: url },
     },
